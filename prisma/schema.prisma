@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  admin
+  ceo
+  license
+  spec
+  hr
+  ovk
+}
+
+enum ScopeOptionType {
+  orgId
+  departmentId
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  passwordHash      String
+  role              UserRole
+  username          String?
+  orgId             String?
+  departmentId      String?
+  photoUrl          String?
+  legacyFirebaseUid String?  @unique
+  disabled          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([role])
+  @@index([orgId])
+  @@map("users")
+}
+
+model ScopeOption {
+  id        String          @id @default(uuid())
+  type      ScopeOptionType
+  value     String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([type, value])
+  @@index([type])
+  @@map("scope_options")
+}

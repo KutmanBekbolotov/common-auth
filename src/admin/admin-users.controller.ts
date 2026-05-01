@@ -1,0 +1,76 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import type { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
+import { AdminUsersService } from './admin-users.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+
+@Controller('admin/users')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.admin)
+@ApiTags('admin users')
+@ApiBearerAuth()
+export class AdminUsersController {
+  constructor(private readonly adminUsersService: AdminUsersService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List users' })
+  listUsers() {
+    return this.adminUsersService.listUsers();
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Create user' })
+  createUser(@Body() dto: CreateUserDto) {
+    return this.adminUsersService.createUser(dto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update user profile and scope' })
+  @ApiParam({ name: 'id', example: 'user-id' })
+  updateUser(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.adminUsersService.updateUser(id, dto, request.user.id);
+  }
+
+  @Patch(':id/role')
+  @ApiOperation({ summary: 'Update user role' })
+  @ApiParam({ name: 'id', example: 'user-id' })
+  updateUserRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.adminUsersService.updateUserRole(id, dto.role, request.user.id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete user' })
+  @ApiParam({ name: 'id', example: 'user-id' })
+  deleteUser(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.adminUsersService.deleteUser(id, request.user.id);
+  }
+}

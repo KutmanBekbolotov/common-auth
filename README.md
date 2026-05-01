@@ -1,0 +1,100 @@
+# Common Auth
+
+NestJS auth service with PostgreSQL, Prisma, bcrypt password hashes, and access-token based authorization.
+
+## Setup
+
+Docker dev mode:
+
+```bash
+npm run docker:dev:build
+```
+
+This starts PostgreSQL and the API, runs `prisma generate`, applies the schema with `prisma db push`, and seeds the first admin.
+
+Useful URLs:
+
+- API: `http://localhost:3000`
+- Swagger: `http://localhost:3000/docs`
+- Postgres: `localhost:5433`
+
+Stop dev containers:
+
+```bash
+npm run docker:dev:down
+```
+
+Local setup without Docker:
+
+```bash
+npm install
+cp .env.example .env
+npm run prisma:generate
+npm run prisma:migrate -- --name init
+npm run prisma:seed
+npm run start:dev
+```
+
+Required environment:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/common_auth?schema=public"
+JWT_SECRET="change-me"
+JWT_ACCESS_TTL="15m"
+PASSWORD_SALT_ROUNDS="12"
+SWAGGER_PATH="docs"
+```
+
+`npm run prisma:seed` creates the first `admin` from:
+
+```bash
+SEED_ADMIN_EMAIL="admin@example.com"
+SEED_ADMIN_PASSWORD="change-me-admin-password"
+SEED_ADMIN_USERNAME="Admin"
+```
+
+## API
+
+Frontend integration guide: [docs/frontend-integration.md](docs/frontend-integration.md).
+
+Public:
+
+- `GET /` - health response.
+- `POST /auth/login` - body `{ "email": "...", "password": "..." }`, returns `accessToken` and the auth context expected by the frontend.
+
+Authenticated:
+
+- `GET /auth/me` - current auth context.
+- `POST /auth/logout` - stateless access-token logout response.
+
+Admin only:
+
+- `GET /admin/users/scope-options`
+- `POST /admin/users/scope-options`
+- `PATCH /admin/users/scope-options/:id`
+- `DELETE /admin/users/scope-options/:id`
+- `GET /admin/users`
+- `POST /admin/users`
+- `PATCH /admin/users/:id`
+- `PATCH /admin/users/:id/role`
+- `DELETE /admin/users/:id`
+
+Use `Authorization: Bearer <accessToken>` for authenticated requests.
+
+Supported roles:
+
+```text
+admin | ceo | license | spec | hr | ovk
+```
+
+`spec` users must have both `orgId` and `departmentId`. Available values are returned by `GET /admin/users/scope-options`.
+
+## Checks
+
+```bash
+npm run lint
+npm run build
+npm test
+npm run test:e2e
+npx prisma validate
+```
