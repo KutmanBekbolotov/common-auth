@@ -24,6 +24,7 @@ model User {
   id                String   @id @default(uuid())
   email             String   @unique
   passwordHash      String
+  refreshTokenHash  String?  @map("refresh_token_hash")
   role              UserRole
   username          String?
   orgId             String?

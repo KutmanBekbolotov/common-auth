@@ -1,8 +1,18 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import type { AuthSession } from './types/auth-session.type';
 import type { AuthenticatedRequest } from './types/authenticated-request.type';
 
 @Controller('auth')
@@ -12,8 +22,37 @@ export class AuthController {
 
   @Post('login')
   @ApiOperation({ summary: 'Login with email and password' })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const session = await this.authService.login(dto.email, dto.password);
+
+    this.authService.setRefreshTokenCookie(response, session.refreshToken);
+
+    return this.toPublicAuthSession(session);
+  }
+
+  @Post('refresh')
+  @ApiOperation({
+    summary: 'Refresh access token using httpOnly refresh cookie',
+  })
+  async refresh(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const refreshToken = this.authService.extractRefreshToken(request);
+
+    try {
+      const session = await this.authService.refresh(refreshToken);
+
+      this.authService.setRefreshTokenCookie(response, session.refreshToken);
+
+      return this.toPublicAuthSession(session);
+    } catch (error) {
+      this.authService.clearRefreshTokenCookie(response);
+      throw error;
+    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -28,7 +67,19 @@ export class AuthController {
   @Post('logout')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout current access-token session' })
-  logout() {
-    return this.authService.logout();
+  logout(
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    this.authService.clearRefreshTokenCookie(response);
+
+    return this.authService.logout(request.user.id);
+  }
+
+  private toPublicAuthSession(session: AuthSession) {
+    const { refreshToken, ...responseBody } = session;
+    void refreshToken;
+
+    return responseBody;
   }
 }

@@ -58,15 +58,16 @@ admin | ovk
 
 1. Пользователь вводит `email` и `password`.
 2. Фронт вызывает `POST /auth/login`.
-3. Backend возвращает `accessToken` и auth context.
+3. Backend возвращает `accessToken`, auth context и ставит `httpOnly` refresh cookie.
 4. Фронт сохраняет `accessToken`.
 5. Все API-запросы отправляются с `Authorization: Bearer <accessToken>`.
-6. При старте приложения, если token есть, фронт вызывает `GET /auth/me`.
-7. Если `/auth/me` вернул `401`, token нужно удалить и отправить пользователя на `/login`.
+6. Если access token истек, фронт вызывает `POST /auth/refresh`, получает новый `accessToken` и повторяет исходный запрос.
+7. При старте приложения, если token есть, фронт вызывает `GET /auth/me`.
+8. Если refresh тоже истек или невалиден, фронт удаляет локальный token и отправляет пользователя на `/login`.
 
 ## Token Storage
 
-Сейчас backend выдает только access token, без refresh cookie.
+Backend выдает access token в response body и refresh token в `httpOnly` cookie.
 
 Практичный dev-вариант:
 
@@ -74,13 +75,15 @@ admin | ovk
 localStorage.setItem('accessToken', accessToken);
 ```
 
+Refresh cookie браузер отправляет сам, поэтому фронту достаточно хранить только `accessToken`.
+
 При logout:
 
 ```ts
 localStorage.removeItem('accessToken');
 ```
 
-Более безопасный вариант для production - хранить token в памяти приложения, но тогда пользователь будет разлогинен после refresh страницы.
+Если не хочется хранить `accessToken` в `localStorage`, можно на старте приложения вызывать `POST /auth/refresh` и восстанавливать сессию только из cookie.
 
 ## Auth Endpoints
 
@@ -156,12 +159,24 @@ Notes:
 - `ProfilePic` дублирует `photoUrl` для совместимости со старым фронтом; если аватара нет, приходит пустая строка.
 - `scope` собирает роль, организацию, отдел и permissions в одном объекте.
 - `permissions.cloud` показывает, можно ли пользователю открывать облако.
-- `passwordHash` никогда не возвращается.
+- `passwordHash` и `refreshTokenHash` никогда не возвращаются.
 
 Possible errors:
 
 - `401` - неверные email/password или истекший/битый token.
 - `403` - пользователь отключен.
+
+### POST /auth/refresh
+
+Требует валидный `httpOnly` refresh cookie.
+
+Response такой же, как `POST /auth/login`.
+
+Поведение:
+
+- backend проверяет refresh token;
+- если токен валиден, backend выдает новый `accessToken`;
+- refresh cookie ротируется на каждом успешном обновлении.
 
 ### GET /auth/me
 
@@ -187,7 +202,7 @@ Response:
 }
 ```
 
-Так как access token stateless, фронт обязан сам удалить token локально. Backend не хранит серверную сессию.
+Frontend должен удалить локальный `accessToken`, а backend инвалидирует сохраненный refresh token и очищает cookie.
 
 ## Admin User Endpoints
 
@@ -516,6 +531,7 @@ import axios from 'axios';
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_AUTH_API_URL ?? 'http://localhost:3000',
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
@@ -530,10 +546,32 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('accessToken');
-      window.location.assign('/login');
+  async (error) => {
+    const request = error.config as
+      | (typeof error.config & { _retry?: boolean })
+      | undefined;
+    const isRefreshRequest = request?.url?.endsWith('/auth/refresh');
+    const isLoginRequest = request?.url?.endsWith('/auth/login');
+
+    if (
+      error.response?.status === 401 &&
+      request &&
+      !request._retry &&
+      !isRefreshRequest &&
+      !isLoginRequest
+    ) {
+      request._retry = true;
+
+      try {
+        const { data } = await api.post('/auth/refresh');
+        localStorage.setItem('accessToken', data.accessToken);
+        request.headers = request.headers ?? {};
+        request.headers.Authorization = `Bearer ${data.accessToken}`;
+        return api.request(request);
+      } catch {
+        localStorage.removeItem('accessToken');
+        window.location.assign('/login');
+      }
     }
 
     return Promise.reject(error);

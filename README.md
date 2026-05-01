@@ -1,6 +1,6 @@
 # Common Auth
 
-NestJS auth service with PostgreSQL, Prisma, bcrypt password hashes, and access-token based authorization.
+NestJS auth service with PostgreSQL, Prisma, bcrypt password hashes, JWT access tokens, and refresh-cookie session renewal.
 
 ## Setup
 
@@ -40,7 +40,9 @@ Required environment:
 ```bash
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/common_auth?schema=public"
 JWT_SECRET="change-me"
-JWT_ACCESS_TTL="15m"
+JWT_ACCESS_TTL="4h"
+JWT_REFRESH_SECRET="change-me-refresh"
+JWT_REFRESH_TTL="30d"
 PASSWORD_SALT_ROUNDS="12"
 SWAGGER_PATH="docs"
 ```
@@ -60,12 +62,13 @@ Frontend integration guide: [docs/frontend-integration.md](docs/frontend-integra
 Public:
 
 - `GET /` - health response.
-- `POST /auth/login` - body `{ "email": "...", "password": "..." }`, returns `accessToken` and the auth context expected by the frontend.
+- `POST /auth/login` - body `{ "email": "...", "password": "..." }`, returns `accessToken`, auth context, and sets an `httpOnly` refresh cookie.
+- `POST /auth/refresh` - rotates the refresh cookie and returns a new `accessToken` plus auth context.
 
 Authenticated:
 
 - `GET /auth/me` - current auth context.
-- `POST /auth/logout` - stateless access-token logout response.
+- `POST /auth/logout` - clears the stored refresh session and expires the refresh cookie.
 
 Admin only:
 

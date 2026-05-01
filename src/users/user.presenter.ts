@@ -1,6 +1,6 @@
 import { User, UserRole } from '@prisma/client';
 
-export type SafeUser = Omit<User, 'passwordHash'>;
+export type SafeUser = Omit<User, 'passwordHash' | 'refreshTokenHash'>;
 
 export type AuthResponseUser = SafeUser & {
   ProfilePic: string;
@@ -36,6 +36,7 @@ export type AuthPermissions = {
 export function toSafeUser(user: User): SafeUser {
   const safeUser = { ...user };
   delete (safeUser as Partial<User>).passwordHash;
+  delete (safeUser as Partial<User>).refreshTokenHash;
 
   return safeUser;
 }

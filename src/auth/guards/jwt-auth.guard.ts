@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ACCESS_TOKEN_TYPE } from '../auth.constants';
 import type { AuthenticatedRequest } from '../types/authenticated-request.type';
 import type { JwtPayload } from '../types/jwt-payload.type';
 
@@ -41,6 +42,10 @@ export class JwtAuthGuard implements CanActivate {
       });
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
+    }
+
+    if (payload.type && payload.type !== ACCESS_TOKEN_TYPE) {
+      throw new UnauthorizedException('Invalid access token');
     }
 
     const user = await this.prisma.user.findUnique({
