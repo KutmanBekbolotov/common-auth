@@ -166,4 +166,25 @@ describe('AdminUsersService', () => {
       adminUserScopeOptionsService.assertScopeOptionExists,
     ).toHaveBeenNthCalledWith(2, 'departmentId', 'Osh-City');
   });
+
+  it('prevents administrative users from changing their own role', async () => {
+    prismaService.user.findUnique.mockResolvedValue({
+      id: 'user-id',
+      email: 'admin@example.com',
+      role: UserRole.SuperAdmin,
+      username: 'Admin',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      passwordHash: 'hash',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      service.updateUserRole('user-id', UserRole.Manager, 'user-id'),
+    ).rejects.toThrow('Administrative user cannot change own role');
+  });
 });

@@ -1,4 +1,5 @@
 import { User, UserRole } from '@prisma/client';
+import { CLOUD_ACCESS_ROLES } from '../auth/auth.constants';
 
 export type SafeUser = Omit<User, 'passwordHash' | 'refreshTokenHash'>;
 
@@ -86,6 +87,6 @@ export function toUserScope(
 
 export function toAuthPermissions(role: UserRole): AuthPermissions {
   return {
-    cloud: role === UserRole.admin || role === UserRole.ovk,
+    cloud: CLOUD_ACCESS_ROLES.includes(role),
   };
 }

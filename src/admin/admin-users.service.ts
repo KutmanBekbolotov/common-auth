@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { ADMIN_USER_ROLES } from '../auth/auth.constants';
 import { toAuthResponseUser } from '../users/user.presenter';
 import { AdminUserScopeOptionsService } from './admin-user-scope-options.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -100,8 +101,14 @@ export class AdminUsersService {
       nextDepartmentId,
     );
 
-    if (id === actorId && nextRole !== UserRole.admin) {
-      throw new BadRequestException('Admin cannot remove own admin role');
+    if (
+      id === actorId &&
+      this.isAdministrativeRole(existingUser.role) &&
+      nextRole !== existingUser.role
+    ) {
+      throw new BadRequestException(
+        'Administrative user cannot change own role',
+      );
     }
 
     if (id === actorId && dto.disabled === true) {
@@ -184,11 +191,18 @@ export class AdminUsersService {
   }
 
   async updateUserRole(id: string, role: UserRole, actorId: string) {
-    if (id === actorId && role !== UserRole.admin) {
-      throw new BadRequestException('Admin cannot remove own admin role');
+    const existingUser = await this.getExistingUser(id);
+
+    if (
+      id === actorId &&
+      this.isAdministrativeRole(existingUser.role) &&
+      role !== existingUser.role
+    ) {
+      throw new BadRequestException(
+        'Administrative user cannot change own role',
+      );
     }
 
-    const existingUser = await this.getExistingUser(id);
     await this.adminUserScopeOptionsService.assertScopeOptionExists(
       'orgId',
       existingUser.orgId,
@@ -279,5 +293,9 @@ export class AdminUsersService {
 
   private valueIsMissing(value: unknown): value is null | undefined {
     return value === undefined || value === null;
+  }
+
+  private isAdministrativeRole(role: UserRole): boolean {
+    return ADMIN_USER_ROLES.includes(role);
   }
 }

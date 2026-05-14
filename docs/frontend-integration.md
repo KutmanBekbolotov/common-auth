@@ -33,10 +33,10 @@ Authorization: Bearer <accessToken>
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk
+admin | ceo | license | spec | hr | ovk | TV | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA
 ```
 
-Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Списки значений фронт должен получать из `GET /admin/users/scope-options`.
+Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Списки ролей и scope-значений фронт должен получать из `GET /admin/users/scope-options`.
 
 ## Permissions
 
@@ -49,10 +49,10 @@ permissions.cloud === true;
 Сейчас доступ к облаку получают:
 
 ```text
-admin | ovk
+admin | ovk | SuperAdmin | System
 ```
 
-То есть `ovk` должен видеть облако так же, как `admin`.
+То есть `ovk`, `SuperAdmin` и `System` должны видеть облако так же, как `admin`.
 
 ## Auth Flow
 
@@ -212,7 +212,7 @@ Frontend должен удалить локальный `accessToken`, а backen
 Authorization: Bearer <adminAccessToken>
 ```
 
-И доступны только роли `admin`.
+И доступны роли `admin` и `SuperAdmin`.
 
 ### GET /admin/users
 
@@ -224,14 +224,14 @@ Response:
     {
       "id": "user-id",
       "email": "user@example.com",
-      "role": "spec",
+      "role": "Manager",
       "username": "User",
       "orgId": "Bishkek",
       "departmentId": "Osh-City",
       "photoUrl": null,
       "ProfilePic": "",
       "scope": {
-        "role": "spec",
+        "role": "Manager",
         "orgId": "Bishkek",
         "departmentId": "Osh-City",
         "permissions": {
@@ -249,7 +249,7 @@ Response:
 
 ### GET /admin/users/scope-options
 
-Возвращает справочники для селектов `orgId` и `departmentId`, а также список записей с `id` для admin CRUD.
+Возвращает справочники для селектов `role`, `orgId` и `departmentId`, а также список записей с `id` для admin CRUD.
 
 Response:
 
@@ -266,6 +266,22 @@ Response:
       "type": "departmentId",
       "value": "Osh-City"
     }
+  ],
+  "roles": [
+    "admin",
+    "ceo",
+    "license",
+    "spec",
+    "hr",
+    "ovk",
+    "TV",
+    "Terminal",
+    "SuperAdmin",
+    "Manager",
+    "Auditor",
+    "Operator",
+    "System",
+    "PRESSA"
   ],
   "orgIds": [
     "Bishkek",
@@ -441,7 +457,7 @@ Validation rules:
 - `password` минимум 8 символов.
 - `role` должен быть одним из разрешенных.
 - если `role = spec`, обязательны `orgId` и `departmentId`.
-- `orgId` и `departmentId` должны браться из `GET /admin/users/scope-options`.
+- `role`, `orgId` и `departmentId` должны браться из `GET /admin/users/scope-options`.
 - `ProfilePic` необязателен. Его можно отправлять вместо `photoUrl`; пустая строка очищает аватар.
 
 ### PATCH /admin/users/:id
@@ -476,7 +492,7 @@ Response:
 
 Ограничения:
 
-- admin не может снять роль `admin` сам с себя;
+- admin и SuperAdmin не могут менять свою собственную административную роль;
 - admin не может отключить сам себя через `disabled: true`;
 - если итоговая роль `spec`, итоговые `orgId` и `departmentId` обязательны.
 - если переданы `orgId` или `departmentId`, они должны быть из `GET /admin/users/scope-options`.
@@ -489,7 +505,7 @@ Request:
 
 ```json
 {
-  "role": "hr"
+  "role": "Operator"
 }
 ```
 
@@ -505,7 +521,7 @@ Response:
 
 Ограничения:
 
-- admin не может снять роль `admin` сам с себя;
+- admin и SuperAdmin не могут менять свою собственную административную роль;
 - если новая роль `spec`, у пользователя уже должны быть `orgId` и `departmentId`.
 
 ### DELETE /admin/users/:id
@@ -590,12 +606,41 @@ type AuthContextValue = {
     uid: string;
     email: string;
   } | null;
-  userRole: 'admin' | 'ceo' | 'license' | 'spec' | 'hr' | 'ovk' | null;
+  userRole:
+    | 'admin'
+    | 'ceo'
+    | 'license'
+    | 'spec'
+    | 'hr'
+    | 'ovk'
+    | 'TV'
+    | 'Terminal'
+    | 'SuperAdmin'
+    | 'Manager'
+    | 'Auditor'
+    | 'Operator'
+    | 'System'
+    | 'PRESSA'
+    | null;
   userProfile: UserProfile | null;
   orgId: string | null;
   departmentId: string | null;
   scope: {
-    role: 'admin' | 'ceo' | 'license' | 'spec' | 'hr' | 'ovk';
+    role:
+      | 'admin'
+      | 'ceo'
+      | 'license'
+      | 'spec'
+      | 'hr'
+      | 'ovk'
+      | 'TV'
+      | 'Terminal'
+      | 'SuperAdmin'
+      | 'Manager'
+      | 'Auditor'
+      | 'Operator'
+      | 'System'
+      | 'PRESSA';
     orgId: string | null;
     departmentId: string | null;
     permissions: {

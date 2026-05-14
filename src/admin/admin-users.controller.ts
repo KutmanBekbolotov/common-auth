@@ -15,8 +15,8 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ADMIN_USER_ROLES } from '../auth/auth.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
@@ -27,7 +27,7 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.admin)
+@Roles(...ADMIN_USER_ROLES)
 @ApiTags('admin users')
 @ApiBearerAuth()
 export class AdminUsersController {

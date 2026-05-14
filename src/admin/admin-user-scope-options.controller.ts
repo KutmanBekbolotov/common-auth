@@ -14,8 +14,8 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ADMIN_USER_ROLES } from '../auth/auth.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminUserScopeOptionsService } from './admin-user-scope-options.service';
@@ -24,7 +24,7 @@ import { UpdateScopeOptionDto } from './dto/update-scope-option.dto';
 
 @Controller('admin/users/scope-options')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.admin)
+@Roles(...ADMIN_USER_ROLES)
 @ApiTags('admin user scope options')
 @ApiBearerAuth()
 export class AdminUserScopeOptionsController {
@@ -33,7 +33,9 @@ export class AdminUserScopeOptionsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'List available orgId and departmentId values' })
+  @ApiOperation({
+    summary: 'List available role, orgId, and departmentId values',
+  })
   listScopeOptions() {
     return this.adminUserScopeOptionsService.listScopeOptions();
   }

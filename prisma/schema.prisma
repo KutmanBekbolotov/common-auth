@@ -13,6 +13,14 @@ enum UserRole {
   spec
   hr
   ovk
+  TV
+  Terminal
+  SuperAdmin
+  Manager
+  Auditor
+  Operator
+  System
+  PRESSA
 }
 
 enum ScopeOptionType {

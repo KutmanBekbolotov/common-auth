@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ScopeOptionType } from '@prisma/client';
+import { Prisma, ScopeOptionType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_SCOPE_OPTIONS } from './user-scope-options';
 
@@ -226,6 +226,7 @@ export class AdminUserScopeOptionsService {
 
     return {
       items: items.map((item) => this.toScopeOptionItem(item)),
+      roles: Object.values(UserRole),
       orgIds,
       departmentIds,
     };
