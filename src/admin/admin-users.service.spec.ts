@@ -77,6 +77,39 @@ describe('AdminUsersService', () => {
     ).toHaveBeenNthCalledWith(2, 'departmentId', 'Osh-City');
   });
 
+  it('allows creating Practice users without orgId and departmentId', async () => {
+    adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
+      undefined,
+    );
+    prismaService.user.create.mockResolvedValue({
+      id: 'user-id',
+      email: 'practice@example.com',
+      role: UserRole.Practice,
+      username: 'Practice User',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await service.createUser({
+      email: 'practice@example.com',
+      password: 'strong-password',
+      role: UserRole.Practice,
+    });
+
+    expect(prismaService.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        role: UserRole.Practice,
+        orgId: null,
+        departmentId: null,
+      }),
+    });
+  });
+
   it('delegates scope validation during user updates', async () => {
     adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
       undefined,
@@ -165,6 +198,46 @@ describe('AdminUsersService', () => {
     expect(
       adminUserScopeOptionsService.assertScopeOptionExists,
     ).toHaveBeenNthCalledWith(2, 'departmentId', 'Osh-City');
+  });
+
+  it('allows updating role to Practice without orgId and departmentId', async () => {
+    adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
+      undefined,
+    );
+    prismaService.user.findUnique.mockResolvedValue({
+      id: 'user-id',
+      email: 'user@example.com',
+      role: UserRole.hr,
+      username: 'User',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      passwordHash: 'hash',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    prismaService.user.update.mockResolvedValue({
+      id: 'user-id',
+      email: 'user@example.com',
+      role: UserRole.Practice,
+      username: 'User',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await service.updateUserRole('user-id', UserRole.Practice, 'admin-id');
+
+    expect(prismaService.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      data: { role: UserRole.Practice },
+    });
   });
 
   it('prevents administrative users from changing their own role', async () => {

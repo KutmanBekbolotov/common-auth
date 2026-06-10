@@ -87,10 +87,10 @@ Use `Authorization: Bearer <accessToken>` for authenticated requests.
 Supported roles:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA
 ```
 
-`spec` users must have both `orgId` and `departmentId`. Available `roles`, `orgId`, and `departmentId` values are returned by `GET /admin/users/scope-options`.
+Only `spec` users must have both `orgId` and `departmentId`. Available `roles`, `orgId`, and `departmentId` values are returned by `GET /admin/users/scope-options`.
 
 ## Checks
 

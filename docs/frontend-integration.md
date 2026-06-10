@@ -33,10 +33,10 @@ Authorization: Bearer <accessToken>
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA
 ```
 
-Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Списки ролей и scope-значений фронт должен получать из `GET /admin/users/scope-options`.
+Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для `Practice` они не обязательны. Списки ролей и scope-значений фронт должен получать из `GET /admin/users/scope-options`.
 
 ## Permissions
 
@@ -275,6 +275,7 @@ Response:
     "hr",
     "ovk",
     "TV",
+    "Practice",
     "Terminal",
     "SuperAdmin",
     "Manager",
@@ -614,6 +615,7 @@ type AuthContextValue = {
     | 'hr'
     | 'ovk'
     | 'TV'
+    | 'Practice'
     | 'Terminal'
     | 'SuperAdmin'
     | 'Manager'
@@ -634,6 +636,7 @@ type AuthContextValue = {
       | 'hr'
       | 'ovk'
       | 'TV'
+      | 'Practice'
       | 'Terminal'
       | 'SuperAdmin'
       | 'Manager'
