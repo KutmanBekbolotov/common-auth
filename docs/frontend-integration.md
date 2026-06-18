@@ -33,10 +33,10 @@ Authorization: Bearer <accessToken>
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | citizen
 ```
 
-Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для `Practice` они не обязательны. Списки ролей и scope-значений фронт должен получать из `GET /admin/users/scope-options`.
+Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для `Practice` они не обязательны. Роль `Practice` предназначена для пользователей табло и не должна использовать admin/distribution flow. Для интерфейсов распределения используйте `spec` и другие рабочие роли.
 
 ## Permissions
 
@@ -282,7 +282,8 @@ Response:
     "Auditor",
     "Operator",
     "System",
-    "PRESSA"
+    "PRESSA",
+    "citizen"
   ],
   "orgIds": [
     "Bishkek",
@@ -623,6 +624,7 @@ type AuthContextValue = {
     | 'Operator'
     | 'System'
     | 'PRESSA'
+    | 'citizen'
     | null;
   userProfile: UserProfile | null;
   orgId: string | null;
@@ -643,7 +645,8 @@ type AuthContextValue = {
       | 'Auditor'
       | 'Operator'
       | 'System'
-      | 'PRESSA';
+      | 'PRESSA'
+      | 'citizen';
     orgId: string | null;
     departmentId: string | null;
     permissions: {

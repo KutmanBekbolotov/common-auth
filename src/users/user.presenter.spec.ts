@@ -10,5 +10,6 @@ describe('user presenter permissions', () => {
   it('keeps cloud access disabled for non-privileged roles', () => {
     expect(toAuthPermissions(UserRole.Manager)).toEqual({ cloud: false });
     expect(toAuthPermissions(UserRole.PRESSA)).toEqual({ cloud: false });
+    expect(toAuthPermissions(UserRole.citizen)).toEqual({ cloud: false });
   });
 });
