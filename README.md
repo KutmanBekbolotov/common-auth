@@ -62,6 +62,7 @@ Frontend integration guide: [docs/frontend-integration.md](docs/frontend-integra
 Public:
 
 - `GET /` - health response.
+- `POST /auth/register` - body `{ "email": "...", "password": "...", "fullName": "...", "phone": "...", "pin": "..." }`, creates a public `Citizen` account, returns `accessToken`, auth context, and sets an `httpOnly` refresh cookie.
 - `POST /auth/login` - body `{ "email": "...", "password": "..." }`, returns `accessToken`, auth context, and sets an `httpOnly` refresh cookie.
 - `POST /auth/refresh` - rotates the refresh cookie and returns a new `accessToken` plus auth context.
 
@@ -87,7 +88,7 @@ Use `Authorization: Bearer <accessToken>` for authenticated requests.
 Supported roles:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | Citizen
 ```
 
 Only `spec` users must have both `orgId` and `departmentId`. `Practice` is intended for display-only users and should not be used for admin/distribution screens. Available `roles`, `orgId`, and `departmentId` values for admin forms are returned by `GET /admin/users/scope-options`.

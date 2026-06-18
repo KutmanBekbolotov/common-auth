@@ -5,6 +5,7 @@ describe('AuthController', () => {
   let controller: AuthController;
   let authService: {
     login: jest.Mock;
+    register: jest.Mock;
     refresh: jest.Mock;
     logout: jest.Mock;
     setRefreshTokenCookie: jest.Mock;
@@ -15,6 +16,7 @@ describe('AuthController', () => {
   beforeEach(() => {
     authService = {
       login: jest.fn(),
+      register: jest.fn(),
       refresh: jest.fn(),
       logout: jest.fn(),
       setRefreshTokenCookie: jest.fn(),
@@ -69,6 +71,73 @@ describe('AuthController', () => {
         permissions: { cloud: true },
       },
       permissions: { cloud: true },
+    });
+  });
+
+  it('returns the public auth payload and sets the refresh cookie on registration', async () => {
+    authService.register.mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      currentUser: { id: '1', uid: '1', email: 'user@example.com' },
+      user: { id: '1', role: 'Citizen' },
+      userProfile: { id: '1', role: 'Citizen' },
+      userRole: 'Citizen',
+      orgId: null,
+      departmentId: null,
+      scope: {
+        role: 'Citizen',
+        orgId: null,
+        departmentId: null,
+        permissions: { cloud: false },
+      },
+      permissions: { cloud: false },
+    });
+
+    const response = {};
+    const result = await controller.register(
+      {
+        email: 'user@example.com',
+        password: 'strong-password',
+        fullName: 'Бакыт Жумабеков',
+        phone: '+996 555 12-34-56',
+        pin: '20105199500123',
+      },
+      {
+        headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.1' },
+        ip: '127.0.0.1',
+      } as never,
+      response as never,
+    );
+
+    expect(authService.register).toHaveBeenCalledWith(
+      {
+        email: 'user@example.com',
+        password: 'strong-password',
+        fullName: 'Бакыт Жумабеков',
+        phone: '+996 555 12-34-56',
+        pin: '20105199500123',
+      },
+      '203.0.113.10',
+    );
+    expect(authService.setRefreshTokenCookie).toHaveBeenCalledWith(
+      response,
+      'refresh-token',
+    );
+    expect(result).toEqual({
+      accessToken: 'access-token',
+      currentUser: { id: '1', uid: '1', email: 'user@example.com' },
+      user: { id: '1', role: 'Citizen' },
+      userProfile: { id: '1', role: 'Citizen' },
+      userRole: 'Citizen',
+      orgId: null,
+      departmentId: null,
+      scope: {
+        role: 'Citizen',
+        orgId: null,
+        departmentId: null,
+        permissions: { cloud: false },
+      },
+      permissions: { cloud: false },
     });
   });
 

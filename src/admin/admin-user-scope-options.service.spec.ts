@@ -82,7 +82,9 @@ describe('AdminUserScopeOptionsService', () => {
         { id: '1', type: ScopeOptionType.orgId, value: 'Bishkek' },
         { id: '2', type: ScopeOptionType.departmentId, value: 'Osh-City' },
       ],
-      roles: Object.values(UserRole),
+      roles: Object.values(UserRole).filter(
+        (role) => role !== UserRole.citizen,
+      ),
       orgIds: ['Bishkek'],
       departmentIds: ['Osh-City'],
     });

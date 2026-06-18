@@ -16,6 +16,10 @@ type ScopeOptionItem = {
   value: string;
 };
 
+const ROLE_OPTIONS = Object.values(UserRole).filter(
+  (role) => role !== UserRole.citizen,
+);
+
 @Injectable()
 export class AdminUserScopeOptionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -226,7 +230,7 @@ export class AdminUserScopeOptionsService {
 
     return {
       items: items.map((item) => this.toScopeOptionItem(item)),
-      roles: Object.values(UserRole),
+      roles: ROLE_OPTIONS,
       orgIds,
       departmentIds,
     };

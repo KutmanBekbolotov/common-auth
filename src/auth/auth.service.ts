@@ -1,12 +1,15 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import type { User } from '@prisma/client';
+import { Prisma, type User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
@@ -24,8 +27,33 @@ import {
 import type { AuthSession } from './types/auth-session.type';
 import type { JwtPayload } from './types/jwt-payload.type';
 
+type RegisterInput = {
+  email: string;
+  password: string;
+  fullName: string;
+  phone?: string | null;
+  pin?: string | null;
+};
+
+type RateLimitState = {
+  count: number;
+  resetAt: number;
+};
+
+const REGISTER_IP_RATE_LIMIT = {
+  limit: 20,
+  windowMs: 15 * 60 * 1000,
+};
+
+const REGISTER_EMAIL_RATE_LIMIT = {
+  limit: 5,
+  windowMs: 60 * 60 * 1000,
+};
+
 @Injectable()
 export class AuthService {
+  private readonly registrationRateLimits = new Map<string, RateLimitState>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -52,6 +80,40 @@ export class AuthService {
     }
 
     return this.createAuthSession(user);
+  }
+
+  async register(
+    input: RegisterInput,
+    clientIp: string,
+  ): Promise<AuthSession> {
+    const email = this.normalizeEmail(input.email);
+
+    this.assertRegistrationRateLimit(clientIp, email);
+
+    const fullName = this.normalizeFullName(input.fullName);
+    const passwordHash = await bcrypt.hash(
+      input.password,
+      this.getPasswordSaltRounds(),
+    );
+
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          role: UserRole.Citizen,
+          username: fullName,
+          phone: this.normalizeOptionalString(input.phone),
+          pin: this.normalizeOptionalString(input.pin),
+          disabled: false,
+        },
+      });
+
+      return this.createAuthSession(user);
+    } catch (error) {
+      this.handleRegistrationCreateError(error);
+      throw error;
+    }
   }
 
   async me(userId: string) {
@@ -245,5 +307,74 @@ export class AuthService {
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
+  }
+
+  private normalizeFullName(fullName: string): string {
+    const normalizedFullName = fullName.trim();
+
+    if (normalizedFullName.length < 2) {
+      throw new BadRequestException(
+        'fullName must be at least 2 characters long',
+      );
+    }
+
+    return normalizedFullName;
+  }
+
+  private normalizeOptionalString(value?: string | null): string | null {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private getPasswordSaltRounds(): number {
+    return Number(this.configService.get<string>('PASSWORD_SALT_ROUNDS') ?? 12);
+  }
+
+  private assertRegistrationRateLimit(clientIp: string, email: string) {
+    this.consumeRegistrationRateLimit(
+      `ip:${clientIp}`,
+      REGISTER_IP_RATE_LIMIT.limit,
+      REGISTER_IP_RATE_LIMIT.windowMs,
+      'Too many registration attempts from this IP',
+    );
+    this.consumeRegistrationRateLimit(
+      `email:${email}`,
+      REGISTER_EMAIL_RATE_LIMIT.limit,
+      REGISTER_EMAIL_RATE_LIMIT.windowMs,
+      'Too many registration attempts for this email',
+    );
+  }
+
+  private consumeRegistrationRateLimit(
+    key: string,
+    limit: number,
+    windowMs: number,
+    message: string,
+  ) {
+    const now = Date.now();
+    const state = this.registrationRateLimits.get(key);
+
+    if (!state || state.resetAt <= now) {
+      this.registrationRateLimits.set(key, {
+        count: 1,
+        resetAt: now + windowMs,
+      });
+      return;
+    }
+
+    if (state.count >= limit) {
+      throw new HttpException(message, HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    state.count += 1;
+  }
+
+  private handleRegistrationCreateError(error: unknown) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throw new ConflictException('User with this email already exists');
+    }
   }
 }

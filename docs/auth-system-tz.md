@@ -73,7 +73,7 @@
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | Citizen
 ```
 
 Правила:
@@ -89,7 +89,7 @@ admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin 
 
 ### Access token
 
-Access token возвращается в body ответа `POST /auth/login` и `POST /auth/refresh`.
+Access token возвращается в body ответа `POST /auth/register`, `POST /auth/login` и `POST /auth/refresh`.
 
 JWT payload:
 
@@ -147,8 +147,8 @@ JWT payload:
 ## 6. Основной auth flow
 
 1. Пользователь вводит email/password.
-2. Frontend вызывает `POST /auth/login`.
-3. Backend проверяет email, bcrypt password hash и `disabled`.
+2. Frontend вызывает `POST /auth/login` или `POST /auth/register`.
+3. Backend проверяет email, bcrypt password hash и `disabled` для login или создает `Citizen` для register.
 4. Backend возвращает `accessToken` и auth context.
 5. Backend ставит `httpOnly` refresh cookie.
 6. Frontend хранит access token и отправляет его во все backend-сервисы:
@@ -244,6 +244,42 @@ Response:
 - `401` - неверные email/password;
 - `403` - пользователь отключен.
 
+### POST /auth/register
+
+Публичный endpoint для самостоятельной регистрации гражданина с сайта без CRM и без admin token.
+
+Request:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "strong-password",
+  "fullName": "Бакыт Жумабеков",
+  "phone": "+996 555 12-34-56",
+  "pin": "20105199500123"
+}
+```
+
+Правила:
+
+- `email` обязателен, валидный, уникальный и нормализуется к lowercase;
+- `password` минимум 8 символов;
+- `fullName` минимум 2 символа и сохраняется в `username`;
+- `phone` и `pin` optional;
+- клиент не может передавать `role`; backend назначает `Citizen`;
+- `disabled` по умолчанию `false`;
+- refresh cookie устанавливается так же, как в `POST /auth/login`;
+- есть in-memory rate limit по IP и email;
+- CAPTCHA/Turnstile и email verification можно добавить отдельным шагом после MVP.
+
+Response такой же, как `POST /auth/login`.
+
+Ошибки:
+
+- `400` - невалидные данные или лишние поля в body;
+- `409` - email уже существует;
+- `429` - слишком много попыток регистрации.
+
 ### POST /auth/refresh
 
 Требует валидный `refreshToken` cookie.
@@ -329,7 +365,7 @@ Authorization: Bearer <adminOrSuperAdminAccessToken>
 
 ### POST /admin/users
 
-Создает пользователя. Публичной регистрации нет.
+Создает пользователя через admin flow. Для самостоятельной регистрации сайта используйте `POST /auth/register`.
 
 Request:
 
@@ -436,7 +472,7 @@ Endpoint-ы доступны только `admin` и `SuperAdmin`.
       "value": "Bishkek"
     }
   ],
-  "roles": ["admin", "ceo", "license", "spec", "citizen"],
+  "roles": ["admin", "ceo", "license", "spec", "Citizen"],
   "orgIds": ["Bishkek", "Chuy"],
   "departmentIds": ["Osh-City", "Kemin"]
 }
@@ -565,7 +601,7 @@ Authorization: Bearer <accessToken>
 - `admin`/`SuperAdmin` обычно получают полный доступ;
 - `spec` должен ограничиваться своими `orgId` и `departmentId`;
 - `Practice` использовать только для display-only сценариев;
-- остальные роли (`Manager`, `Auditor`, `Operator`, `ceo`, `license`, `hr`, `ovk`, `TV`, `Terminal`, `System`, `PRESSA`, `citizen`) должны иметь явно описанные права внутри конкретного сервиса;
+- остальные роли (`Manager`, `Auditor`, `Operator`, `ceo`, `license`, `hr`, `ovk`, `TV`, `Terminal`, `System`, `PRESSA`, `Citizen`) должны иметь явно описанные права внутри конкретного сервиса;
 - нельзя полагаться только на скрытие кнопок во frontend.
 
 ### Service-to-service сценарии

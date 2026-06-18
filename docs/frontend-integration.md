@@ -33,10 +33,11 @@ Authorization: Bearer <accessToken>
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | Citizen
 ```
 
 Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для `Practice` они не обязательны. Роль `Practice` предназначена для пользователей табло и не должна использовать admin/distribution flow. Для интерфейсов распределения используйте `spec` и другие рабочие роли.
+Публичная регистрация сайта всегда создает пользователя с ролью `Citizen`; клиент не должен отправлять `role`.
 
 ## Permissions
 
@@ -56,8 +57,8 @@ admin | ovk | SuperAdmin | System
 
 ## Auth Flow
 
-1. Пользователь вводит `email` и `password`.
-2. Фронт вызывает `POST /auth/login`.
+1. Пользователь вводит `email` и `password` для login или регистрационные данные для register.
+2. Фронт вызывает `POST /auth/login` или `POST /auth/register`.
 3. Backend возвращает `accessToken`, auth context и ставит `httpOnly` refresh cookie.
 4. Фронт сохраняет `accessToken`.
 5. Все API-запросы отправляются с `Authorization: Bearer <accessToken>`.
@@ -86,6 +87,41 @@ localStorage.removeItem('accessToken');
 Если не хочется хранить `accessToken` в `localStorage`, можно на старте приложения вызывать `POST /auth/refresh` и восстанавливать сессию только из cookie.
 
 ## Auth Endpoints
+
+### POST /auth/register
+
+Публичный endpoint для самостоятельной регистрации гражданина с сайта.
+
+Request:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "strong-password",
+  "fullName": "Бакыт Жумабеков",
+  "phone": "+996 555 12-34-56",
+  "pin": "20105199500123"
+}
+```
+
+Правила:
+
+- `email` обязателен, валидный, уникальный и нормализуется к lowercase;
+- `password` минимум 8 символов;
+- `fullName` минимум 2 символа, сохраняется в `username`;
+- `phone` и `pin` optional;
+- `role` нельзя передавать с клиента, backend сам назначает `Citizen`;
+- `disabled` создается как `false`;
+- refresh cookie устанавливается так же, как в `POST /auth/login`;
+- есть in-memory rate limit по IP и email.
+
+Response такой же, как `POST /auth/login`.
+
+Ошибки:
+
+- `400` - невалидные данные или лишние поля в body;
+- `409` - пользователь с таким email уже существует;
+- `429` - слишком много попыток регистрации.
 
 ### POST /auth/login
 
@@ -283,7 +319,7 @@ Response:
     "Operator",
     "System",
     "PRESSA",
-    "citizen"
+    "Citizen"
   ],
   "orgIds": [
     "Bishkek",
@@ -406,7 +442,7 @@ Response:
 
 ### POST /admin/users
 
-Создает пользователя. Публичной регистрации нет.
+Создает пользователя через admin flow. Для самостоятельной регистрации сайта используйте `POST /auth/register`.
 
 Request:
 
@@ -624,7 +660,7 @@ type AuthContextValue = {
     | 'Operator'
     | 'System'
     | 'PRESSA'
-    | 'citizen'
+    | 'Citizen'
     | null;
   userProfile: UserProfile | null;
   orgId: string | null;
@@ -646,7 +682,7 @@ type AuthContextValue = {
       | 'Operator'
       | 'System'
       | 'PRESSA'
-      | 'citizen';
+      | 'Citizen';
     orgId: string | null;
     departmentId: string | null;
     permissions: {

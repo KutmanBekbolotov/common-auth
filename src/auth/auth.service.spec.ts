@@ -1,7 +1,11 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { AuthService } from './auth.service';
 
 const baseUser = {
@@ -11,6 +15,8 @@ const baseUser = {
   refreshTokenHash: null,
   role: UserRole.admin,
   username: 'Admin',
+  phone: null,
+  pin: null,
   orgId: null,
   departmentId: null,
   photoUrl: null,
@@ -26,6 +32,7 @@ describe('AuthService', () => {
     user: {
       findUnique: jest.Mock;
       findUniqueOrThrow: jest.Mock;
+      create: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
     };
@@ -43,6 +50,7 @@ describe('AuthService', () => {
       user: {
         findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
+        create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
       },
@@ -62,6 +70,8 @@ describe('AuthService', () => {
             return 'refresh-secret';
           case 'JWT_REFRESH_TTL':
             return '30d';
+          case 'PASSWORD_SALT_ROUNDS':
+            return '4';
           case 'NODE_ENV':
             return 'test';
           default:
@@ -131,6 +141,98 @@ describe('AuthService', () => {
     expect(result.refreshToken).toBe('refresh-token');
     expect(result.user).not.toHaveProperty('passwordHash');
     expect(result.user).not.toHaveProperty('refreshTokenHash');
+  });
+
+  it('registers a public citizen account and starts a session', async () => {
+    prismaService.user.create.mockResolvedValue({
+      ...baseUser,
+      id: 'citizen-id',
+      email: 'user@example.com',
+      role: UserRole.Citizen,
+      username: 'Бакыт Жумабеков',
+      phone: '+996 555 12-34-56',
+      pin: '20105199500123',
+      passwordHash: 'password-hash',
+    });
+    prismaService.user.update.mockResolvedValue({
+      ...baseUser,
+      id: 'citizen-id',
+      email: 'user@example.com',
+      role: UserRole.Citizen,
+      username: 'Бакыт Жумабеков',
+      refreshTokenHash: hashToken('refresh-token'),
+    });
+    jwtService.signAsync
+      .mockResolvedValueOnce('access-token')
+      .mockResolvedValueOnce('refresh-token');
+
+    const result = await service.register(
+      {
+        email: ' User@Example.com ',
+        password: 'strong-password',
+        fullName: ' Бакыт Жумабеков ',
+        phone: ' +996 555 12-34-56 ',
+        pin: ' 20105199500123 ',
+      },
+      '203.0.113.10',
+    );
+
+    expect(prismaService.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        email: 'user@example.com',
+        role: UserRole.Citizen,
+        username: 'Бакыт Жумабеков',
+        phone: '+996 555 12-34-56',
+        pin: '20105199500123',
+        disabled: false,
+        passwordHash: expect.any(String),
+      }),
+    });
+    expect(result.accessToken).toBe('access-token');
+    expect(result.refreshToken).toBe('refresh-token');
+    expect(result.user.role).toBe(UserRole.Citizen);
+    expect(result.user.username).toBe('Бакыт Жумабеков');
+    expect(result.user).not.toHaveProperty('passwordHash');
+    expect(result.user).not.toHaveProperty('refreshTokenHash');
+    expect(result.user).not.toHaveProperty('pin');
+  });
+
+  it('maps duplicate registration email to conflict', async () => {
+    prismaService.user.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(
+      service.register(
+        {
+          email: 'user@example.com',
+          password: 'strong-password',
+          fullName: 'Бакыт Жумабеков',
+        },
+        '203.0.113.10',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rate limits registration attempts by email', async () => {
+    const input = {
+      email: 'rate@example.com',
+      password: 'strong-password',
+      fullName: 'A',
+    };
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await expect(service.register(input, '203.0.113.20')).rejects.toThrow(
+        'fullName must be at least 2 characters long',
+      );
+    }
+
+    await expect(service.register(input, '203.0.113.20')).rejects.toThrow(
+      'Too many registration attempts for this email',
+    );
   });
 
   it('refreshes a session when the cookie token matches the stored hash', async () => {

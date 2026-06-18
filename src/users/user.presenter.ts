@@ -1,7 +1,7 @@
 import { User, UserRole } from '@prisma/client';
 import { CLOUD_ACCESS_ROLES } from '../auth/auth.constants';
 
-export type SafeUser = Omit<User, 'passwordHash' | 'refreshTokenHash'>;
+export type SafeUser = Omit<User, 'passwordHash' | 'refreshTokenHash' | 'pin'>;
 
 export type AuthResponseUser = SafeUser & {
   ProfilePic: string;
@@ -38,6 +38,7 @@ export function toSafeUser(user: User): SafeUser {
   const safeUser = { ...user };
   delete (safeUser as Partial<User>).passwordHash;
   delete (safeUser as Partial<User>).refreshTokenHash;
+  delete (safeUser as Partial<User>).pin;
 
   return safeUser;
 }

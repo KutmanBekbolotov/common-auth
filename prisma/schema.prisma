@@ -22,6 +22,7 @@ enum UserRole {
   Operator
   System
   PRESSA
+  Citizen
   citizen
 }
 
@@ -37,6 +38,8 @@ model User {
   refreshTokenHash  String?  @map("refresh_token_hash")
   role              UserRole
   username          String?
+  phone             String?
+  pin               String?
   orgId             String?
   departmentId      String?
   photoUrl          String?

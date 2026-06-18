@@ -11,6 +11,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { AuthSession } from './types/auth-session.type';
 import type { AuthenticatedRequest } from './types/authenticated-request.type';
@@ -27,6 +28,23 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const session = await this.authService.login(dto.email, dto.password);
+
+    this.authService.setRefreshTokenCookie(response, session.refreshToken);
+
+    return this.toPublicAuthSession(session);
+  }
+
+  @Post('register')
+  @ApiOperation({ summary: 'Register a public citizen account' })
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const session = await this.authService.register(
+      dto,
+      this.getClientIp(request),
+    );
 
     this.authService.setRefreshTokenCookie(response, session.refreshToken);
 
@@ -81,5 +99,19 @@ export class AuthController {
     void refreshToken;
 
     return responseBody;
+  }
+
+  private getClientIp(request: Request): string {
+    const forwardedFor = request.headers['x-forwarded-for'];
+
+    if (Array.isArray(forwardedFor)) {
+      return forwardedFor[0] ?? request.ip ?? 'unknown';
+    }
+
+    if (forwardedFor) {
+      return forwardedFor.split(',')[0]?.trim() || request.ip || 'unknown';
+    }
+
+    return request.ip ?? request.socket.remoteAddress ?? 'unknown';
   }
 }
