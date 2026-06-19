@@ -73,13 +73,14 @@
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | Citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
 Правила:
 
 - административные endpoint-ы доступны только ролям `admin` и `SuperAdmin`;
 - пользователи с ролью `spec` обязаны иметь `orgId` и `departmentId`;
+- роль `General-department` предназначена для центрального аппарата и не требует `orgId`/`departmentId`;
 - роль `Practice` предназначена для display-only/табло-сценариев и не должна использоваться для admin/distribution flow;
 - доступ к облаку определяется полем `permissions.cloud`;
 - `permissions.cloud = true` для ролей `admin`, `ovk`, `SuperAdmin`, `System`;
@@ -472,7 +473,7 @@ Endpoint-ы доступны только `admin` и `SuperAdmin`.
       "value": "Bishkek"
     }
   ],
-  "roles": ["admin", "ceo", "license", "spec", "Citizen"],
+  "roles": ["admin", "ceo", "license", "spec", "General-department", "Citizen"],
   "orgIds": ["Bishkek", "Chuy"],
   "departmentIds": ["Osh-City", "Kemin"]
 }
@@ -601,7 +602,7 @@ Authorization: Bearer <accessToken>
 - `admin`/`SuperAdmin` обычно получают полный доступ;
 - `spec` должен ограничиваться своими `orgId` и `departmentId`;
 - `Practice` использовать только для display-only сценариев;
-- остальные роли (`Manager`, `Auditor`, `Operator`, `ceo`, `license`, `hr`, `ovk`, `TV`, `Terminal`, `System`, `PRESSA`, `Citizen`) должны иметь явно описанные права внутри конкретного сервиса;
+- остальные роли (`Manager`, `Auditor`, `Operator`, `ceo`, `license`, `hr`, `ovk`, `TV`, `Terminal`, `System`, `PRESSA`, `General-department`, `Citizen`) должны иметь явно описанные права внутри конкретного сервиса;
 - нельзя полагаться только на скрытие кнопок во frontend.
 
 ### Service-to-service сценарии

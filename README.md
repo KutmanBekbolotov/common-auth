@@ -88,10 +88,10 @@ Use `Authorization: Bearer <accessToken>` for authenticated requests.
 Supported roles:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | Citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
-Only `spec` users must have both `orgId` and `departmentId`. `Practice` is intended for display-only users and should not be used for admin/distribution screens. Available `roles`, `orgId`, and `departmentId` values for admin forms are returned by `GET /admin/users/scope-options`.
+Only `spec` users must have both `orgId` and `departmentId`. `General-department` is for central apparatus users and does not require `orgId` or `departmentId`. `Practice` is intended for display-only users and should not be used for admin/distribution screens. Available `roles`, `orgId`, and `departmentId` values for admin forms are returned by `GET /admin/users/scope-options`.
 
 ## Checks
 

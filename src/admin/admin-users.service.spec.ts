@@ -110,6 +110,39 @@ describe('AdminUsersService', () => {
     });
   });
 
+  it('allows creating General-department users without orgId and departmentId', async () => {
+    adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
+      undefined,
+    );
+    prismaService.user.create.mockResolvedValue({
+      id: 'user-id',
+      email: 'general@example.com',
+      role: UserRole.GeneralDepartment,
+      username: 'General User',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await service.createUser({
+      email: 'general@example.com',
+      password: 'strong-password',
+      role: UserRole.GeneralDepartment,
+    });
+
+    expect(prismaService.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        role: UserRole.GeneralDepartment,
+        orgId: null,
+        departmentId: null,
+      }),
+    });
+  });
+
   it('delegates scope validation during user updates', async () => {
     adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
       undefined,

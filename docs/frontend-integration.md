@@ -33,10 +33,10 @@ Authorization: Bearer <accessToken>
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | Citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
-Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для `Practice` они не обязательны. Роль `Practice` предназначена для пользователей табло и не должна использовать admin/distribution flow. Для интерфейсов распределения используйте `spec` и другие рабочие роли.
+Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для `Practice` и `General-department` они не обязательны. Роль `General-department` предназначена для центрального аппарата. Роль `Practice` предназначена для пользователей табло и не должна использовать admin/distribution flow. Для интерфейсов распределения используйте `spec` и другие рабочие роли.
 Публичная регистрация сайта всегда создает пользователя с ролью `Citizen`; клиент не должен отправлять `role`.
 
 ## Permissions
@@ -319,6 +319,7 @@ Response:
     "Operator",
     "System",
     "PRESSA",
+    "General-department",
     "Citizen"
   ],
   "orgIds": [
@@ -660,6 +661,7 @@ type AuthContextValue = {
     | 'Operator'
     | 'System'
     | 'PRESSA'
+    | 'General-department'
     | 'Citizen'
     | null;
   userProfile: UserProfile | null;
@@ -682,6 +684,7 @@ type AuthContextValue = {
       | 'Operator'
       | 'System'
       | 'PRESSA'
+      | 'General-department'
       | 'Citizen';
     orgId: string | null;
     departmentId: string | null;
