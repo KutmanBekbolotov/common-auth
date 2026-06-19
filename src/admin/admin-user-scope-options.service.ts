@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ScopeOptionType, UserRole } from '@prisma/client';
+import { Prisma, ScopeOptionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PUBLIC_USER_ROLES } from '../users/user-role';
 import { DEFAULT_SCOPE_OPTIONS } from './user-scope-options';
 
 type ScopeFieldName = 'orgId' | 'departmentId';
@@ -15,10 +16,6 @@ type ScopeOptionItem = {
   type: ScopeOptionType;
   value: string;
 };
-
-const ROLE_OPTIONS = Object.values(UserRole).filter(
-  (role) => role !== UserRole.citizen,
-);
 
 @Injectable()
 export class AdminUserScopeOptionsService {
@@ -230,7 +227,7 @@ export class AdminUserScopeOptionsService {
 
     return {
       items: items.map((item) => this.toScopeOptionItem(item)),
-      roles: ROLE_OPTIONS,
+      roles: PUBLIC_USER_ROLES,
       orgIds,
       departmentIds,
     };

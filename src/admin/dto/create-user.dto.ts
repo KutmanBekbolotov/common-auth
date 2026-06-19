@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
@@ -10,6 +11,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
+import { PUBLIC_USER_ROLES, toPrismaUserRole } from '../../users/user-role';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'user@example.com' })
@@ -21,7 +23,8 @@ export class CreateUserDto {
   @MinLength(8)
   password: string;
 
-  @ApiProperty({ enum: UserRole, example: UserRole.Manager })
+  @ApiProperty({ enum: PUBLIC_USER_ROLES, example: UserRole.Manager })
+  @Transform(({ value }) => toPrismaUserRole(value))
   @IsEnum(UserRole)
   role: UserRole;
 

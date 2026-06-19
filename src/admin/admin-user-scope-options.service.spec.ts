@@ -1,5 +1,6 @@
-import { Prisma, ScopeOptionType, UserRole } from '@prisma/client';
+import { Prisma, ScopeOptionType } from '@prisma/client';
 import { ConflictException } from '@nestjs/common';
+import { PUBLIC_USER_ROLES } from '../users/user-role';
 import { AdminUserScopeOptionsService } from './admin-user-scope-options.service';
 
 type ScopeOptionRecord = {
@@ -82,9 +83,7 @@ describe('AdminUserScopeOptionsService', () => {
         { id: '1', type: ScopeOptionType.orgId, value: 'Bishkek' },
         { id: '2', type: ScopeOptionType.departmentId, value: 'Osh-City' },
       ],
-      roles: Object.values(UserRole).filter(
-        (role) => role !== UserRole.citizen,
-      ),
+      roles: PUBLIC_USER_ROLES,
       orgIds: ['Bishkek'],
       departmentIds: ['Osh-City'],
     });

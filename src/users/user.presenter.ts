@@ -1,7 +1,13 @@
 import { User, UserRole } from '@prisma/client';
 import { CLOUD_ACCESS_ROLES } from '../auth/auth.constants';
+import { PublicUserRole, toPublicUserRole } from './user-role';
 
-export type SafeUser = Omit<User, 'passwordHash' | 'refreshTokenHash' | 'pin'>;
+export type SafeUser = Omit<
+  User,
+  'passwordHash' | 'refreshTokenHash' | 'pin' | 'role'
+> & {
+  role: PublicUserRole;
+};
 
 export type AuthResponseUser = SafeUser & {
   ProfilePic: string;
@@ -16,7 +22,7 @@ export type AuthContextResponse = {
   };
   user: AuthResponseUser;
   userProfile: AuthResponseUser;
-  userRole: UserRole;
+  userRole: PublicUserRole;
   orgId: string | null;
   departmentId: string | null;
   scope: UserScope;
@@ -24,7 +30,7 @@ export type AuthContextResponse = {
 };
 
 export type UserScope = {
-  role: UserRole;
+  role: PublicUserRole;
   orgId: string | null;
   departmentId: string | null;
   permissions: AuthPermissions;
@@ -35,12 +41,15 @@ export type AuthPermissions = {
 };
 
 export function toSafeUser(user: User): SafeUser {
-  const safeUser = { ...user };
-  delete (safeUser as Partial<User>).passwordHash;
-  delete (safeUser as Partial<User>).refreshTokenHash;
-  delete (safeUser as Partial<User>).pin;
+  const { passwordHash, refreshTokenHash, pin, role, ...safeUser } = user;
+  void passwordHash;
+  void refreshTokenHash;
+  void pin;
 
-  return safeUser;
+  return {
+    ...safeUser,
+    role: toPublicUserRole(role),
+  };
 }
 
 export function toAuthResponseUser(user: User): AuthResponseUser {
@@ -66,7 +75,7 @@ export function toAuthContextResponse(user: User): AuthContextResponse {
     },
     user: responseUser,
     userProfile: responseUser,
-    userRole: user.role,
+    userRole: toPublicUserRole(user.role),
     orgId: user.orgId,
     departmentId: user.departmentId,
     scope: responseUser.scope,
@@ -79,7 +88,7 @@ export function toUserScope(
   permissions = toAuthPermissions(user.role),
 ): UserScope {
   return {
-    role: user.role,
+    role: toPublicUserRole(user.role),
     orgId: user.orgId,
     departmentId: user.departmentId,
     permissions,
