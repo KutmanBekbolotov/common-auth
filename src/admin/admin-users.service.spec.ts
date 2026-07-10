@@ -143,6 +143,54 @@ describe('AdminUsersService', () => {
     });
   });
 
+  it('requires orgId and departmentId when creating spec users', async () => {
+    adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
+      undefined,
+    );
+
+    await expect(
+      service.createUser({
+        email: 'spec@example.com',
+        password: 'strong-password',
+        role: UserRole.spec,
+      }),
+    ).rejects.toThrow('spec users require orgId and departmentId');
+    expect(prismaService.user.create).not.toHaveBeenCalled();
+  });
+
+  it('allows creating inventory users without orgId and departmentId', async () => {
+    adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
+      undefined,
+    );
+    prismaService.user.create.mockResolvedValue({
+      id: 'user-id',
+      email: 'inventory-it@example.com',
+      role: UserRole.INVENTORY_IT,
+      username: 'Inventory IT',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await service.createUser({
+      email: 'inventory-it@example.com',
+      password: 'strong-password',
+      role: UserRole.INVENTORY_IT,
+    });
+
+    expect(prismaService.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        role: UserRole.INVENTORY_IT,
+        orgId: null,
+        departmentId: null,
+      }),
+    });
+  });
+
   it('delegates scope validation during user updates', async () => {
     adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
       undefined,
@@ -270,6 +318,51 @@ describe('AdminUsersService', () => {
     expect(prismaService.user.update).toHaveBeenCalledWith({
       where: { id: 'user-id' },
       data: { role: UserRole.Practice },
+    });
+  });
+
+  it('allows updating role to inventory auditor without orgId and departmentId', async () => {
+    adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
+      undefined,
+    );
+    prismaService.user.findUnique.mockResolvedValue({
+      id: 'user-id',
+      email: 'user@example.com',
+      role: UserRole.hr,
+      username: 'User',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      passwordHash: 'hash',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    prismaService.user.update.mockResolvedValue({
+      id: 'user-id',
+      email: 'user@example.com',
+      role: UserRole.INVENTORY_AUDITOR,
+      username: 'User',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      passwordHash: 'hash',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await service.updateUserRole(
+      'user-id',
+      UserRole.INVENTORY_AUDITOR,
+      'admin-id',
+    );
+
+    expect(prismaService.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      data: { role: UserRole.INVENTORY_AUDITOR },
     });
   });
 

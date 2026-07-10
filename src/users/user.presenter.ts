@@ -25,6 +25,7 @@ export type AuthContextResponse = {
   userRole: PublicUserRole;
   orgId: string | null;
   departmentId: string | null;
+  position: string | null;
   scope: UserScope;
   permissions: AuthPermissions;
 };
@@ -33,6 +34,7 @@ export type UserScope = {
   role: PublicUserRole;
   orgId: string | null;
   departmentId: string | null;
+  position: string | null;
   permissions: AuthPermissions;
 };
 
@@ -78,19 +80,21 @@ export function toAuthContextResponse(user: User): AuthContextResponse {
     userRole: toPublicUserRole(user.role),
     orgId: user.orgId,
     departmentId: user.departmentId,
+    position: user.position,
     scope: responseUser.scope,
     permissions,
   };
 }
 
 export function toUserScope(
-  user: Pick<User, 'role' | 'orgId' | 'departmentId'>,
+  user: Pick<User, 'role' | 'orgId' | 'departmentId' | 'position'>,
   permissions = toAuthPermissions(user.role),
 ): UserScope {
   return {
     role: toPublicUserRole(user.role),
     orgId: user.orgId,
     departmentId: user.departmentId,
+    position: user.position,
     permissions,
   };
 }

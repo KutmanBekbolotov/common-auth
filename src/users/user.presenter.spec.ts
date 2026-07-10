@@ -29,6 +29,7 @@ describe('user presenter permissions', () => {
       pin: null,
       orgId: null,
       departmentId: null,
+      position: null,
       photoUrl: null,
       legacyFirebaseUid: null,
       disabled: false,
@@ -39,5 +40,30 @@ describe('user presenter permissions', () => {
     expect(response.userRole).toBe('General-department');
     expect(response.user.role).toBe('General-department');
     expect(response.scope.role).toBe('General-department');
+  });
+
+  it('keeps inventory roles unchanged in auth context', () => {
+    const response = toAuthContextResponse({
+      id: 'user-id',
+      email: 'inventory-it@example.com',
+      passwordHash: 'hash',
+      refreshTokenHash: null,
+      role: UserRole.INVENTORY_IT,
+      username: 'Inventory IT',
+      phone: null,
+      pin: null,
+      orgId: null,
+      departmentId: null,
+      position: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    expect(response.userRole).toBe('INVENTORY_IT');
+    expect(response.userProfile.role).toBe('INVENTORY_IT');
+    expect(response.scope.role).toBe('INVENTORY_IT');
   });
 });

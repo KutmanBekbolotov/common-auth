@@ -7,6 +7,7 @@ export type AuthenticatedUser = {
   username: string | null;
   orgId: string | null;
   departmentId: string | null;
+  position: string | null;
   photoUrl: string | null;
   disabled: boolean;
 };

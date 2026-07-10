@@ -9,10 +9,14 @@ import { Prisma, User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { ADMIN_USER_ROLES } from '../auth/auth.constants';
+import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { toAuthResponseUser } from '../users/user.presenter';
 import { AdminUserScopeOptionsService } from './admin-user-scope-options.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+
+const REQUIRED_SCOPE_USER_ROLES: UserRole[] = [UserRole.spec];
 
 @Injectable()
 export class AdminUsersService {
@@ -22,14 +26,66 @@ export class AdminUsersService {
     private readonly adminUserScopeOptionsService: AdminUserScopeOptionsService,
   ) {}
 
-  async listUsers() {
+  async listUsers(query: ListUsersQueryDto = {}, actor?: AuthenticatedUser) {
+    const where = this.buildListUsersWhere(query, actor);
+    const take = query.limit ? Math.min(Math.max(query.limit, 1), 200) : undefined;
     const users = await this.prisma.user.findMany({
+      where,
       orderBy: [{ role: 'asc' }, { email: 'asc' }],
+      take,
     });
 
     return {
       users: users.map((user) => toAuthResponseUser(user)),
     };
+  }
+
+  private buildListUsersWhere(
+    query: ListUsersQueryDto,
+    actor?: AuthenticatedUser,
+  ): Prisma.UserWhereInput {
+    const where: Prisma.UserWhereInput = {};
+    const search = this.normalizeOptionalString(query.query);
+
+    if (search) {
+      where.OR = [
+        { email: { contains: search, mode: 'insensitive' } },
+        { username: { contains: search, mode: 'insensitive' } },
+        { position: { contains: search, mode: 'insensitive' } },
+        { orgId: { contains: search, mode: 'insensitive' } },
+        { departmentId: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (actor?.role === UserRole.Manager) {
+      if (!actor.orgId || !actor.departmentId) {
+        return { id: '__manager_without_scope__' };
+      }
+
+      return {
+        ...where,
+        role: UserRole.Operator,
+        orgId: actor.orgId,
+        departmentId: actor.departmentId,
+      };
+    }
+
+    const orgId = this.normalizeOptionalString(query.orgId);
+    const departmentId = this.normalizeOptionalString(query.departmentId);
+
+    if (query.role) {
+      where.role = query.role;
+    }
+
+    if (orgId) {
+      where.orgId = orgId;
+    }
+
+    if (departmentId) {
+      where.departmentId = departmentId;
+    }
+
+    return where;
   }
 
   async createUser(dto: CreateUserDto) {
@@ -60,6 +116,7 @@ export class AdminUsersService {
           username: this.normalizeOptionalString(dto.username),
           orgId,
           departmentId,
+          position: this.normalizeOptionalString(dto.position),
           photoUrl: this.normalizePhotoUrl(dto.photoUrl, dto.ProfilePic),
           legacyFirebaseUid: this.normalizeOptionalString(
             dto.legacyFirebaseUid,
@@ -143,6 +200,10 @@ export class AdminUsersService {
 
     if (this.fieldWasProvided(dto, 'departmentId')) {
       data.departmentId = nextDepartmentId;
+    }
+
+    if (this.fieldWasProvided(dto, 'position')) {
+      data.position = this.normalizeOptionalString(dto.position);
     }
 
     if (
@@ -249,7 +310,7 @@ export class AdminUsersService {
     orgId: string | null | undefined,
     departmentId: string | null | undefined,
   ) {
-    if (role !== UserRole.spec) {
+    if (!REQUIRED_SCOPE_USER_ROLES.includes(role)) {
       return;
     }
 

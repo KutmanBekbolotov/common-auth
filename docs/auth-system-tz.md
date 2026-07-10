@@ -40,6 +40,7 @@
 - `username: string | null` - отображаемое имя.
 - `orgId: string | null` - организация/регион.
 - `departmentId: string | null` - отдел/подразделение.
+- `position: string | null` - должность сотрудника.
 - `photoUrl: string | null` - URL аватара.
 - `legacyFirebaseUid: string | null` - уникальный старый Firebase UID.
 - `disabled: boolean` - отключенный пользователь не может логиниться и проходить guard.
@@ -73,13 +74,14 @@
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
 Правила:
 
 - административные endpoint-ы доступны только ролям `admin` и `SuperAdmin`;
 - пользователи с ролью `spec` обязаны иметь `orgId` и `departmentId`;
+- inventory-роли не требуют `orgId`/`departmentId`; складовой доступ вычисляет inventory-service по роли;
 - роль `General-department` предназначена для центрального аппарата и не требует `orgId`/`departmentId`;
 - роль `Practice` предназначена для display-only/табло-сценариев и не должна использоваться для admin/distribution flow;
 - доступ к облаку определяется полем `permissions.cloud`;
@@ -389,7 +391,8 @@ Request:
 - `email` обязателен, валидный и уникальный;
 - `password` минимум 8 символов;
 - `role` обязателен и должен быть одним из `UserRole`;
-- если `role = spec`, обязательны `orgId` и `departmentId`;
+- если `role` равен `spec`, обязательны `orgId` и `departmentId`;
+- значения `Manager` и `Operator` регистрозависимые; `manager` и `operator` невалидны;
 - если `orgId`/`departmentId` переданы, они должны существовать в справочниках;
 - `photoUrl` или `ProfilePic` должны быть URL, если не пустые;
 - пустые optional строки нормализуются в `null`;
@@ -473,7 +476,7 @@ Endpoint-ы доступны только `admin` и `SuperAdmin`.
       "value": "Bishkek"
     }
   ],
-  "roles": ["admin", "ceo", "license", "spec", "General-department", "Citizen"],
+  "roles": ["admin", "SuperAdmin", "INVENTORY_IT", "INVENTORY_AHO", "INVENTORY_ACCOUNTANT", "INVENTORY_AUDITOR", "..."],
   "orgIds": ["Bishkek", "Chuy"],
   "departmentIds": ["Osh-City", "Kemin"]
 }
@@ -579,7 +582,7 @@ Authorization: Bearer <accessToken>
 Сервис должен получить актуальный auth context:
 
 - вызвать `GET /auth/me` в `common-auth` с тем же `Authorization` header;
-- использовать из ответа `userRole`, `orgId`, `departmentId`, `scope`, `permissions`;
+- использовать из ответа `userRole`, `orgId`, `departmentId`, `position`, `scope`, `permissions`;
 - кешировать результат максимум до истечения access token;
 - при `401`/`403` от `common-auth` отклонять запрос.
 
@@ -604,6 +607,195 @@ Authorization: Bearer <accessToken>
 - `Practice` использовать только для display-only сценариев;
 - остальные роли (`Manager`, `Auditor`, `Operator`, `ceo`, `license`, `hr`, `ovk`, `TV`, `Terminal`, `System`, `PRESSA`, `General-department`, `Citizen`) должны иметь явно описанные права внутри конкретного сервиса;
 - нельзя полагаться только на скрытие кнопок во frontend.
+
+### Интеграция backend электронной очереди
+
+Backend электронной очереди должен считать `common-auth` единственным источником идентичности, роли, региона, отдела и должности сотрудника. Очередь не должна читать auth DB напрямую и не должна хранить собственные пароли сотрудников.
+
+Обязательные env-переменные очереди:
+
+```bash
+COMMON_AUTH_URL="http://common-auth-api:3000"
+JWT_SECRET="same-secret-as-common-auth"
+AUTH_CONTEXT_CACHE_TTL_SECONDS="60"
+```
+
+`JWT_SECRET` нужен только если очередь сначала проверяет JWT локально. Даже при локальной проверке очередь должна вызывать `GET /auth/me`, если endpoint зависит от роли, `disabled`, `orgId`, `departmentId` или `position`.
+
+Для создания сотрудников очередь должна иметь отдельный доступ к `common-auth`, а не использовать токен текущего менеджера:
+
+```bash
+COMMON_AUTH_MANAGEMENT_TOKEN="admin-or-service-access-token"
+# или
+COMMON_AUTH_PROVISIONING_EMAIL="provisioning-admin@example.com"
+COMMON_AUTH_PROVISIONING_PASSWORD="strong-password"
+```
+
+Если эти значения не настроены, fallback на токен текущего пользователя приведет к `403` для `Manager`, потому что `/admin/users` доступен только `admin` и `SuperAdmin`.
+
+Общий guard для protected endpoint-ов очереди:
+
+1. Прочитать `Authorization: Bearer <accessToken>`.
+2. Если header отсутствует или формат неверный, вернуть `401`.
+3. Вызвать `GET {COMMON_AUTH_URL}/auth/me` с тем же `Authorization` header.
+4. Если `common-auth` вернул `401` или `403`, вернуть `401`/`403` клиенту и не выполнять бизнес-логику.
+5. Если `common-auth` недоступен, fail closed: вернуть `503 Service Unavailable`, а не пускать пользователя без проверки.
+6. Положить в request auth context:
+
+```ts
+type QueueAuthUser = {
+  id: string;
+  email: string;
+  role: UserRole;
+  orgId: string | null;
+  departmentId: string | null;
+  position: string | null;
+  permissions: {
+    cloud: boolean;
+  };
+};
+```
+
+7. Для scoped-ролей проверить, что `orgId` и `departmentId` заполнены. Если у `Manager`, `Operator` или legacy `spec` нет scope, вернуть `403`.
+8. Проверить, разрешена ли роль для конкретного endpoint-а.
+9. Применить фильтр данных по `orgId` и `departmentId`.
+
+Рекомендуемая матрица доступа для очереди:
+
+| Зона                                                                                                                          | Роли                         | Scope                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Полный админ-доступ к очередям, окнам, операторам, настройкам и отчетам                                                       | `admin`, `SuperAdmin`        | все регионы и отделы                                                                         |
+| Служебные фоновые операции                                                                                                    | `System`                     | только явно разрешенные service-to-service endpoint-ы                                        |
+| Управление очередью своего отдела: окна, операторы, вызовы, переносы, закрытие смены, отчеты отдела                           | `Manager`                    | только свой `orgId` + `departmentId`                                                         |
+| Работа с талонами: взять следующий, вызвать, начать обслуживание, завершить, отложить, отменить в пределах своего окна/отдела | `Operator`                   | только свой `orgId` + `departmentId`                                                         |
+| Legacy department accounts во время миграции                                                                                  | `spec`                       | только свой `orgId` + `departmentId`; желательно постепенно заменить на `Operator`/`Manager` |
+| Read-only аудит отчетов                                                                                                       | `Auditor`                    | все или ограниченный scope, если очередь добавит такой режим                                 |
+| Табло, терминалы, киоски                                                                                                      | `TV`, `Terminal`, `Practice` | только display/kiosk endpoint-ы без staff actions                                            |
+| Граждане                                                                                                                      | `Citizen`, `citizen`         | только публичные endpoint-ы получения/проверки талона, если такие есть                       |
+
+Для `Manager` и `Operator` роль является источником прав, а `position` используется только как справочная информация для отображения, аудита и дополнительных бизнес-правил. Нельзя выдавать доступ только по тексту должности.
+
+Создание заведующих и операторов во frontend очереди должно идти только через backend очереди:
+
+```http
+POST /api/v1/staff
+Authorization: Bearer <accessToken>
+```
+
+Payload:
+
+```json
+{
+  "email": "vostok-operator1@gmail.com",
+  "password": "12345678",
+  "username": "Vostok-operator1",
+  "role": "Operator",
+  "queueDepartmentId": 5,
+  "position": "Оператор",
+  "active": true,
+  "windowIds": [1],
+  "serviceIds": [1]
+}
+```
+
+Queue frontend не должен напрямую вызывать `common-auth` `POST /admin/users`. В queue endpoint-ах `departmentId` - это числовой id отдела очереди (`queueDepartmentId`), а строковый auth scope должен храниться на стороне queue department как `authDepartmentId`, например `authDepartmentId: "Восточный отдел"` вместе с `orgId: "Bishkek"`.
+
+Все доменные сущности очереди, которые относятся к подразделению, должны хранить scope:
+
+```ts
+type QueueScopedEntity = {
+  orgId: string;
+  departmentId: string;
+};
+```
+
+Правила scope:
+
+- `Manager` и `Operator` видят и меняют только записи, где `entity.orgId === authUser.orgId` и `entity.departmentId === authUser.departmentId`;
+- `admin` и `SuperAdmin` могут явно передавать `orgId`/`departmentId` в фильтрах и операциях;
+- `System` не должен обходить scope автоматически, каждый service endpoint описывает допустимый scope отдельно;
+- если endpoint принимает `orgId`/`departmentId` в query/body, backend обязан сверить их с auth context, а не доверять frontend;
+- создание талона, назначение окна, вызов клиента, завершение обслуживания и отмена должны писать `actorUserId`, `actorRole`, `orgId`, `departmentId` в audit log.
+
+Минимальный guard/interceptor для NestJS backend-а очереди:
+
+```ts
+async function loadAuthContext(token: string) {
+  const response = await fetch(`${COMMON_AUTH_URL}/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 401) {
+    throw new UnauthorizedException();
+  }
+
+  if (response.status === 403) {
+    throw new ForbiddenException();
+  }
+
+  if (!response.ok) {
+    throw new ServiceUnavailableException('Auth service is unavailable');
+  }
+
+  const context = await response.json();
+
+  return {
+    id: context.currentUser.id,
+    email: context.currentUser.email,
+    role: context.userRole,
+    orgId: context.orgId,
+    departmentId: context.departmentId,
+    position: context.position,
+    permissions: context.permissions,
+  };
+}
+```
+
+Пример проверки scoped endpoint-а:
+
+```ts
+function assertQueueScope(authUser: QueueAuthUser, entity: QueueScopedEntity) {
+  if (authUser.role === 'admin' || authUser.role === 'SuperAdmin') {
+    return;
+  }
+
+  if (!['Manager', 'Operator', 'spec'].includes(authUser.role)) {
+    throw new ForbiddenException();
+  }
+
+  if (!authUser.orgId || !authUser.departmentId) {
+    throw new ForbiddenException('User scope is not assigned');
+  }
+
+  if (
+    entity.orgId !== authUser.orgId ||
+    entity.departmentId !== authUser.departmentId
+  ) {
+    throw new ForbiddenException('Queue item is outside user scope');
+  }
+}
+```
+
+Кеширование auth context допустимо только по access token и не дольше срока жизни токена. Практичный вариант для очереди: in-memory или Redis cache на 30-60 секунд. При logout/disabled пользователь может оставаться в кеше до истечения этого малого TTL, поэтому для критичных операций можно вызывать `/auth/me` без кеша.
+
+Endpoint-ы очереди должны возвращать:
+
+- `401` - нет access token, токен истек или `common-auth` отклонил пользователя;
+- `403` - роль не разрешена, scope отсутствует или запрошен чужой регион/отдел;
+- `503` - `common-auth` временно недоступен и невозможно подтвердить пользователя.
+
+Frontend очереди должен делать refresh только после `401`. На `403` нужно показывать отказ прав без вызова `/auth/refresh`.
+
+Чеклист внедрения в backend электронной очереди:
+
+- удалить локальную авторизацию сотрудников и собственные staff passwords из очереди;
+- заменить employee-directory lookup на `GET /auth/me`;
+- добавить `orgId`, `departmentId`, `actorUserId`, `actorRole` в audit/event записи очереди;
+- закрыть все staff endpoint-ы guard-ом;
+- явно оставить публичными только health, display/kiosk и гражданские endpoint-ы;
+- покрыть тестами `401`, `403`, `admin`, `Manager` своего/чужого отдела, `Operator` своего/чужого отдела и disabled user.
 
 ### Service-to-service сценарии
 

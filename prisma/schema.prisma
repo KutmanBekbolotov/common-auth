@@ -17,6 +17,10 @@ enum UserRole {
   Practice
   Terminal
   SuperAdmin
+  INVENTORY_IT
+  INVENTORY_AHO
+  INVENTORY_ACCOUNTANT
+  INVENTORY_AUDITOR
   Manager
   Auditor
   Operator
@@ -43,6 +47,7 @@ model User {
   pin               String?
   orgId             String?
   departmentId      String?
+  position          String?
   photoUrl          String?
   legacyFirebaseUid String?  @unique
   disabled          Boolean  @default(false)
@@ -51,6 +56,8 @@ model User {
 
   @@index([role])
   @@index([orgId])
+  @@index([departmentId])
+  @@index([position])
   @@map("users")
 }
 

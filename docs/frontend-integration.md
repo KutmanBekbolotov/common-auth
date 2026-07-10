@@ -33,10 +33,10 @@ Authorization: Bearer <accessToken>
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
-Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для `Practice` и `General-department` они не обязательны. Роль `General-department` предназначена для центрального аппарата. Роль `Practice` предназначена для пользователей табло и не должна использовать admin/distribution flow. Для интерфейсов распределения используйте `spec` и другие рабочие роли.
+Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для inventory-ролей, `Practice` и `General-department` они не обязательны. Роль `General-department` предназначена для центрального аппарата. Роль `Practice` предназначена для пользователей табло и не должна использовать admin/distribution flow. Для интерфейсов распределения используйте `spec` и другие рабочие роли.
 Публичная регистрация сайта всегда создает пользователя с ролью `Citizen`; клиент не должен отправлять `role`.
 
 ## Permissions
@@ -193,7 +193,7 @@ Notes:
 - `currentUser.uid` равен `currentUser.id`, чтобы фронту было проще мигрировать с Firebase.
 - `userProfile` дублирует `user`.
 - `ProfilePic` дублирует `photoUrl` для совместимости со старым фронтом; если аватара нет, приходит пустая строка.
-- `scope` собирает роль, организацию, отдел и permissions в одном объекте.
+- `scope` собирает роль, организацию, отдел, должность и permissions в одном объекте.
 - `permissions.cloud` показывает, можно ли пользователю открывать облако.
 - `passwordHash` и `refreshTokenHash` никогда не возвращаются.
 
@@ -314,6 +314,10 @@ Response:
     "Practice",
     "Terminal",
     "SuperAdmin",
+    "INVENTORY_IT",
+    "INVENTORY_AHO",
+    "INVENTORY_ACCOUNTANT",
+    "INVENTORY_AUDITOR",
     "Manager",
     "Auditor",
     "Operator",

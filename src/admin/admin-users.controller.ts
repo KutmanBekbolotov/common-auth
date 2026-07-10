@@ -6,9 +6,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -22,6 +24,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
 import { AdminUsersService } from './admin-users.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
@@ -34,9 +37,13 @@ export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
 
   @Get()
+  @Roles(UserRole.admin, UserRole.SuperAdmin, UserRole.Manager)
   @ApiOperation({ summary: 'List users' })
-  listUsers() {
-    return this.adminUsersService.listUsers();
+  listUsers(
+    @Query() query: ListUsersQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.adminUsersService.listUsers(query, request.user);
   }
 
   @Post()

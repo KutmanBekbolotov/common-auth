@@ -43,6 +43,11 @@ export class CreateUserDto {
   @IsString()
   departmentId?: string;
 
+  @ApiPropertyOptional({ example: 'Главный специалист' })
+  @IsOptional()
+  @IsString()
+  position?: string;
+
   @ApiPropertyOptional({
     example: 'https://example.com/avatar.png',
     nullable: true,
