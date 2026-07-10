@@ -32,6 +32,7 @@ services:
       DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/common_auth?schema=public}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in .env}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-30d}
       PASSWORD_SALT_ROUNDS: ${PASSWORD_SALT_ROUNDS:-12}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
       SWAGGER_PATH: ${SWAGGER_PATH:-docs}

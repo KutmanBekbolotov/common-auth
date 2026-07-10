@@ -10,4 +10,5 @@ export type AuthenticatedUser = {
   position: string | null;
   photoUrl: string | null;
   disabled: boolean;
+  sessionId: string | null;
 };

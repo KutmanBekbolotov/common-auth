@@ -40,8 +40,7 @@ Required environment:
 ```bash
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/common_auth?schema=public"
 JWT_SECRET="change-me"
-JWT_ACCESS_TTL="4h"
-JWT_REFRESH_SECRET="change-me-refresh"
+JWT_ACCESS_TTL="15m"
 JWT_REFRESH_TTL="30d"
 PASSWORD_SALT_ROUNDS="12"
 SWAGGER_PATH="docs"
@@ -64,7 +63,7 @@ Public:
 - `GET /` - health response.
 - `POST /auth/register` - body `{ "email": "...", "password": "...", "fullName": "...", "phone": "...", "pin": "..." }`, creates a public `Citizen` account, returns `accessToken`, auth context, and sets an `httpOnly` refresh cookie.
 - `POST /auth/login` - body `{ "email": "...", "password": "..." }`, returns `accessToken`, auth context, and sets an `httpOnly` refresh cookie.
-- `POST /auth/refresh` - rotates the refresh cookie and returns a new `accessToken` plus auth context.
+- `POST /auth/refresh` - rotates the `refresh_token` cookie and returns a new `accessToken` plus auth context.
 
 Authenticated:
 
@@ -84,6 +83,10 @@ Admin only:
 - `DELETE /admin/users/:id`
 
 Use `Authorization: Bearer <accessToken>` for authenticated requests.
+
+Access tokens are JWTs with `sub`, `sid`, `email`, `type`, `iat`, and `exp`.
+Refresh tokens are opaque random strings stored only in an `httpOnly`
+`refresh_token` cookie; only their SHA-256 hash is stored in PostgreSQL.
 
 Supported roles:
 

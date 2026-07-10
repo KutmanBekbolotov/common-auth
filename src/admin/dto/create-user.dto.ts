@@ -11,7 +11,10 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { PUBLIC_USER_ROLES, toPrismaUserRole } from '../../users/user-role';
+import {
+  ACCEPTED_USER_ROLE_VALUES,
+  toPrismaUserRole,
+} from '../../users/user-role';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'user@example.com' })
@@ -23,7 +26,7 @@ export class CreateUserDto {
   @MinLength(8)
   password: string;
 
-  @ApiProperty({ enum: PUBLIC_USER_ROLES, example: UserRole.Manager })
+  @ApiProperty({ enum: ACCEPTED_USER_ROLE_VALUES, example: 'manager' })
   @Transform(({ value }) => toPrismaUserRole(value))
   @IsEnum(UserRole)
   role: UserRole;

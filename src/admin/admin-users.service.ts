@@ -28,7 +28,9 @@ export class AdminUsersService {
 
   async listUsers(query: ListUsersQueryDto = {}, actor?: AuthenticatedUser) {
     const where = this.buildListUsersWhere(query, actor);
-    const take = query.limit ? Math.min(Math.max(query.limit, 1), 200) : undefined;
+    const take = query.limit
+      ? Math.min(Math.max(query.limit, 1), 200)
+      : undefined;
     const users = await this.prisma.user.findMany({
       where,
       orderBy: [{ role: 'asc' }, { email: 'asc' }],

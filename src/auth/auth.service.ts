@@ -11,7 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, type User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
 import ms, { type StringValue } from 'ms';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,8 +21,8 @@ import {
   AUTH_COOKIE_PATH,
   DEFAULT_ACCESS_TOKEN_TTL,
   DEFAULT_REFRESH_TOKEN_TTL,
+  LEGACY_REFRESH_TOKEN_COOKIE_NAME,
   REFRESH_TOKEN_COOKIE_NAME,
-  REFRESH_TOKEN_TYPE,
 } from './auth.constants';
 import type { AuthSession } from './types/auth-session.type';
 import type { JwtPayload } from './types/jwt-payload.type';
@@ -50,9 +50,20 @@ const REGISTER_EMAIL_RATE_LIMIT = {
   windowMs: 60 * 60 * 1000,
 };
 
+const LOGIN_IP_RATE_LIMIT = {
+  limit: 30,
+  windowMs: 15 * 60 * 1000,
+};
+
+const LOGIN_EMAIL_RATE_LIMIT = {
+  limit: 10,
+  windowMs: 15 * 60 * 1000,
+};
+
 @Injectable()
 export class AuthService {
   private readonly registrationRateLimits = new Map<string, RateLimitState>();
+  private readonly loginRateLimits = new Map<string, RateLimitState>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -60,12 +71,21 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async login(email: string, password: string): Promise<AuthSession> {
+  async login(
+    email: string,
+    password: string,
+    clientIp = 'unknown',
+  ): Promise<AuthSession> {
+    const normalizedEmail = this.normalizeEmail(email);
+
+    this.assertLoginRateLimit(clientIp, normalizedEmail);
+
     const user = await this.prisma.user.findUnique({
-      where: { email: this.normalizeEmail(email) },
+      where: { email: normalizedEmail },
     });
 
     if (!user) {
+      this.recordFailedLogin(clientIp, normalizedEmail);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -76,16 +96,15 @@ export class AuthService {
     const passwordIsValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordIsValid) {
+      this.recordFailedLogin(clientIp, normalizedEmail);
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    this.clearLoginRateLimit(clientIp, normalizedEmail);
     return this.createAuthSession(user);
   }
 
-  async register(
-    input: RegisterInput,
-    clientIp: string,
-  ): Promise<AuthSession> {
+  async register(input: RegisterInput, clientIp: string): Promise<AuthSession> {
     const email = this.normalizeEmail(input.email);
 
     this.assertRegistrationRateLimit(clientIp, email);
@@ -129,17 +148,17 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token is required');
     }
 
-    const payload = await this.verifyRefreshToken(refreshToken);
+    const refreshTokenHash = this.hashToken(refreshToken);
     const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+      where: { refreshTokenHash },
     });
 
-    if (!user || user.disabled || !user.refreshTokenHash) {
+    if (!user || !user.refreshTokenHash) {
       throw new UnauthorizedException('Refresh session is invalid');
     }
 
-    if (user.refreshTokenHash !== this.hashToken(refreshToken)) {
-      throw new UnauthorizedException('Refresh session is invalid');
+    if (user.disabled) {
+      throw new ForbiddenException('User is disabled');
     }
 
     return this.createAuthSession(user);
@@ -148,7 +167,7 @@ export class AuthService {
   async logout(userId: string) {
     await this.prisma.user.updateMany({
       where: { id: userId },
-      data: { refreshTokenHash: null },
+      data: { refreshTokenHash: null, sessionId: null },
     });
 
     return { success: true };
@@ -161,55 +180,57 @@ export class AuthService {
       return null;
     }
 
-    const prefix = `${REFRESH_TOKEN_COOKIE_NAME}=`;
-
-    for (const item of cookieHeader.split(';')) {
-      const trimmedItem = item.trim();
-
-      if (trimmedItem.startsWith(prefix)) {
-        return decodeURIComponent(trimmedItem.slice(prefix.length));
-      }
-    }
-
-    return null;
+    return (
+      this.extractCookieValue(cookieHeader, REFRESH_TOKEN_COOKIE_NAME) ??
+      this.extractCookieValue(cookieHeader, LEGACY_REFRESH_TOKEN_COOKIE_NAME)
+    );
   }
 
   setRefreshTokenCookie(response: Response, refreshToken: string) {
+    const cookieOptions = this.getRefreshCookieOptions();
+
+    response.cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, cookieOptions);
     response.cookie(
-      REFRESH_TOKEN_COOKIE_NAME,
+      LEGACY_REFRESH_TOKEN_COOKIE_NAME,
       refreshToken,
-      this.getRefreshCookieOptions(),
+      cookieOptions,
     );
   }
 
   clearRefreshTokenCookie(response: Response) {
-    response.clearCookie(
-      REFRESH_TOKEN_COOKIE_NAME,
-      this.getRefreshCookieClearOptions(),
-    );
+    const cookieOptions = this.getRefreshCookieClearOptions();
+
+    response.clearCookie(REFRESH_TOKEN_COOKIE_NAME, cookieOptions);
+    response.clearCookie(LEGACY_REFRESH_TOKEN_COOKIE_NAME, cookieOptions);
   }
 
   private async createAuthSession(user: User): Promise<AuthSession> {
-    const [accessToken, refreshToken] = await Promise.all([
-      this.signAccessToken(user),
-      this.signRefreshToken(user),
-    ]);
+    const sessionId = randomUUID();
+    const refreshToken = this.generateRefreshToken();
+    const accessToken = await this.signAccessToken(user, sessionId);
 
-    await this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id: user.id },
-      data: { refreshTokenHash: this.hashToken(refreshToken) },
+      data: {
+        refreshTokenHash: this.hashToken(refreshToken),
+        sessionId,
+      },
     });
 
     return {
       accessToken,
       refreshToken,
-      ...toAuthContextResponse(user),
+      ...toAuthContextResponse(updatedUser),
     };
   }
 
-  private async signAccessToken(user: User): Promise<string> {
+  private async signAccessToken(
+    user: User,
+    sessionId: string,
+  ): Promise<string> {
     const payload: JwtPayload = {
       sub: user.id,
+      sid: sessionId,
       email: user.email,
       type: ACCESS_TOKEN_TYPE,
     };
@@ -221,37 +242,6 @@ export class AuthService {
     });
   }
 
-  private async signRefreshToken(user: User): Promise<string> {
-    const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-      type: REFRESH_TOKEN_TYPE,
-    };
-
-    return this.jwtService.signAsync(payload, {
-      secret: this.getRefreshTokenSecret(),
-      expiresIn: this.getRefreshTokenTtl(),
-    });
-  }
-
-  private async verifyRefreshToken(refreshToken: string): Promise<JwtPayload> {
-    let payload: JwtPayload;
-
-    try {
-      payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
-        secret: this.getRefreshTokenSecret(),
-      });
-    } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
-    }
-
-    if (payload.type && payload.type !== REFRESH_TOKEN_TYPE) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    return payload;
-  }
-
   private getAccessTokenSecret(): string {
     const secret = this.configService.get<string>('JWT_SECRET');
 
@@ -260,13 +250,6 @@ export class AuthService {
     }
 
     return secret;
-  }
-
-  private getRefreshTokenSecret(): string {
-    return (
-      this.configService.get<string>('JWT_REFRESH_SECRET') ??
-      this.getAccessTokenSecret()
-    );
   }
 
   private getRefreshTokenTtl(): StringValue {
@@ -305,6 +288,27 @@ export class AuthService {
     return createHash('sha256').update(token).digest('hex');
   }
 
+  private generateRefreshToken(): string {
+    return randomBytes(64).toString('base64url');
+  }
+
+  private extractCookieValue(
+    cookieHeader: string,
+    cookieName: string,
+  ): string | null {
+    const prefix = `${cookieName}=`;
+
+    for (const item of cookieHeader.split(';')) {
+      const trimmedItem = item.trim();
+
+      if (trimmedItem.startsWith(prefix)) {
+        return decodeURIComponent(trimmedItem.slice(prefix.length));
+      }
+    }
+
+    return null;
+  }
+
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
   }
@@ -330,14 +334,53 @@ export class AuthService {
     return Number(this.configService.get<string>('PASSWORD_SALT_ROUNDS') ?? 12);
   }
 
+  private assertLoginRateLimit(clientIp: string, email: string) {
+    this.assertRateLimitAvailable(
+      this.loginRateLimits,
+      `ip:${clientIp}`,
+      LOGIN_IP_RATE_LIMIT.limit,
+      'Too many login attempts from this IP',
+    );
+    this.assertRateLimitAvailable(
+      this.loginRateLimits,
+      `email:${email}`,
+      LOGIN_EMAIL_RATE_LIMIT.limit,
+      'Too many login attempts for this email',
+    );
+  }
+
+  private recordFailedLogin(clientIp: string, email: string) {
+    this.consumeRateLimit(
+      this.loginRateLimits,
+      `ip:${clientIp}`,
+      LOGIN_IP_RATE_LIMIT.limit,
+      LOGIN_IP_RATE_LIMIT.windowMs,
+      'Too many login attempts from this IP',
+    );
+    this.consumeRateLimit(
+      this.loginRateLimits,
+      `email:${email}`,
+      LOGIN_EMAIL_RATE_LIMIT.limit,
+      LOGIN_EMAIL_RATE_LIMIT.windowMs,
+      'Too many login attempts for this email',
+    );
+  }
+
+  private clearLoginRateLimit(clientIp: string, email: string) {
+    this.loginRateLimits.delete(`ip:${clientIp}`);
+    this.loginRateLimits.delete(`email:${email}`);
+  }
+
   private assertRegistrationRateLimit(clientIp: string, email: string) {
-    this.consumeRegistrationRateLimit(
+    this.consumeRateLimit(
+      this.registrationRateLimits,
       `ip:${clientIp}`,
       REGISTER_IP_RATE_LIMIT.limit,
       REGISTER_IP_RATE_LIMIT.windowMs,
       'Too many registration attempts from this IP',
     );
-    this.consumeRegistrationRateLimit(
+    this.consumeRateLimit(
+      this.registrationRateLimits,
       `email:${email}`,
       REGISTER_EMAIL_RATE_LIMIT.limit,
       REGISTER_EMAIL_RATE_LIMIT.windowMs,
@@ -345,17 +388,32 @@ export class AuthService {
     );
   }
 
-  private consumeRegistrationRateLimit(
+  private assertRateLimitAvailable(
+    rateLimits: Map<string, RateLimitState>,
+    key: string,
+    limit: number,
+    message: string,
+  ) {
+    const now = Date.now();
+    const state = rateLimits.get(key);
+
+    if (state && state.resetAt > now && state.count >= limit) {
+      throw new HttpException(message, HttpStatus.TOO_MANY_REQUESTS);
+    }
+  }
+
+  private consumeRateLimit(
+    rateLimits: Map<string, RateLimitState>,
     key: string,
     limit: number,
     windowMs: number,
     message: string,
   ) {
     const now = Date.now();
-    const state = this.registrationRateLimits.get(key);
+    const state = rateLimits.get(key);
 
     if (!state || state.resetAt <= now) {
-      this.registrationRateLimits.set(key, {
+      rateLimits.set(key, {
         count: 1,
         resetAt: now + windowMs,
       });

@@ -8,6 +8,10 @@ import { createHash } from 'crypto';
 import { Prisma, UserRole } from '@prisma/client';
 import { AuthService } from './auth.service';
 
+const expectAnyString = () => expect.any(String) as unknown as string;
+const expectObjectContaining = (value: Record<string, unknown>) =>
+  expect.objectContaining(value) as unknown;
+
 const baseUser = {
   id: 'user-id',
   email: 'admin@example.com',
@@ -19,9 +23,11 @@ const baseUser = {
   pin: null,
   orgId: null,
   departmentId: null,
+  position: null,
   photoUrl: null,
   legacyFirebaseUid: null,
   disabled: false,
+  sessionId: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
@@ -66,8 +72,6 @@ describe('AuthService', () => {
             return 'access-secret';
           case 'JWT_ACCESS_TTL':
             return '4h';
-          case 'JWT_REFRESH_SECRET':
-            return 'refresh-secret';
           case 'JWT_REFRESH_TTL':
             return '30d';
           case 'PASSWORD_SALT_ROUNDS':
@@ -98,11 +102,10 @@ describe('AuthService', () => {
     });
     prismaService.user.update.mockResolvedValue({
       ...baseUser,
-      refreshTokenHash: hashToken('refresh-token'),
+      refreshTokenHash: 'next-refresh-token-hash',
+      sessionId: 'next-session-id',
     });
-    jwtService.signAsync
-      .mockResolvedValueOnce('access-token')
-      .mockResolvedValueOnce('refresh-token');
+    jwtService.signAsync.mockResolvedValueOnce('access-token');
 
     const result = await service.login(' Admin@Example.com ', 'password');
 
@@ -113,6 +116,7 @@ describe('AuthService', () => {
       1,
       {
         sub: baseUser.id,
+        sid: expectAnyString(),
         email: baseUser.email,
         type: 'access',
       },
@@ -121,26 +125,19 @@ describe('AuthService', () => {
         expiresIn: '4h',
       },
     );
-    expect(jwtService.signAsync).toHaveBeenNthCalledWith(
-      2,
-      {
-        sub: baseUser.id,
-        email: baseUser.email,
-        type: 'refresh',
-      },
-      {
-        secret: 'refresh-secret',
-        expiresIn: '30d',
-      },
-    );
+    expect(jwtService.signAsync).toHaveBeenCalledTimes(1);
     expect(prismaService.user.update).toHaveBeenCalledWith({
       where: { id: baseUser.id },
-      data: { refreshTokenHash: hashToken('refresh-token') },
+      data: {
+        refreshTokenHash: hashToken(result.refreshToken),
+        sessionId: expectAnyString(),
+      },
     });
     expect(result.accessToken).toBe('access-token');
-    expect(result.refreshToken).toBe('refresh-token');
+    expect(result.refreshToken).toEqual(expect.any(String));
     expect(result.user).not.toHaveProperty('passwordHash');
     expect(result.user).not.toHaveProperty('refreshTokenHash');
+    expect(result.user).not.toHaveProperty('sessionId');
   });
 
   it('registers a public citizen account and starts a session', async () => {
@@ -160,11 +157,10 @@ describe('AuthService', () => {
       email: 'user@example.com',
       role: UserRole.Citizen,
       username: 'Бакыт Жумабеков',
-      refreshTokenHash: hashToken('refresh-token'),
+      refreshTokenHash: 'next-refresh-token-hash',
+      sessionId: 'next-session-id',
     });
-    jwtService.signAsync
-      .mockResolvedValueOnce('access-token')
-      .mockResolvedValueOnce('refresh-token');
+    jwtService.signAsync.mockResolvedValueOnce('access-token');
 
     const result = await service.register(
       {
@@ -178,22 +174,24 @@ describe('AuthService', () => {
     );
 
     expect(prismaService.user.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      data: expectObjectContaining({
         email: 'user@example.com',
         role: UserRole.Citizen,
         username: 'Бакыт Жумабеков',
         phone: '+996 555 12-34-56',
         pin: '20105199500123',
         disabled: false,
-        passwordHash: expect.any(String),
+        passwordHash: expectAnyString(),
       }),
     });
     expect(result.accessToken).toBe('access-token');
-    expect(result.refreshToken).toBe('refresh-token');
-    expect(result.user.role).toBe(UserRole.Citizen);
+    expect(result.refreshToken).toEqual(expect.any(String));
+    expect(result.user.role).toBe('other');
+    expect(result.user.authRole).toBe(UserRole.Citizen);
     expect(result.user.username).toBe('Бакыт Жумабеков');
     expect(result.user).not.toHaveProperty('passwordHash');
     expect(result.user).not.toHaveProperty('refreshTokenHash');
+    expect(result.user).not.toHaveProperty('sessionId');
     expect(result.user).not.toHaveProperty('pin');
   });
 
@@ -244,40 +242,29 @@ describe('AuthService', () => {
     });
     prismaService.user.update.mockResolvedValue({
       ...baseUser,
-      refreshTokenHash: hashToken('next-refresh-token'),
+      refreshTokenHash: 'next-refresh-token-hash',
+      sessionId: 'next-session-id',
     });
-    jwtService.verifyAsync.mockResolvedValue({
-      sub: baseUser.id,
-      email: baseUser.email,
-      type: 'refresh',
-    });
-    jwtService.signAsync
-      .mockResolvedValueOnce('next-access-token')
-      .mockResolvedValueOnce('next-refresh-token');
+    jwtService.signAsync.mockResolvedValueOnce('next-access-token');
 
     const result = await service.refresh(currentRefreshToken);
 
-    expect(jwtService.verifyAsync).toHaveBeenCalledWith(currentRefreshToken, {
-      secret: 'refresh-secret',
+    expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      where: { refreshTokenHash: hashToken(currentRefreshToken) },
     });
     expect(prismaService.user.update).toHaveBeenCalledWith({
       where: { id: baseUser.id },
-      data: { refreshTokenHash: hashToken('next-refresh-token') },
+      data: {
+        refreshTokenHash: hashToken(result.refreshToken),
+        sessionId: expectAnyString(),
+      },
     });
     expect(result.accessToken).toBe('next-access-token');
-    expect(result.refreshToken).toBe('next-refresh-token');
+    expect(result.refreshToken).toEqual(expect.any(String));
   });
 
-  it('rejects refresh when the stored hash does not match the cookie token', async () => {
-    prismaService.user.findUnique.mockResolvedValue({
-      ...baseUser,
-      refreshTokenHash: hashToken('different-refresh-token'),
-    });
-    jwtService.verifyAsync.mockResolvedValue({
-      sub: baseUser.id,
-      email: baseUser.email,
-      type: 'refresh',
-    });
+  it('rejects refresh when no stored hash matches the cookie token', async () => {
+    prismaService.user.findUnique.mockResolvedValue(null);
 
     await expect(service.refresh('stale-refresh-token')).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -293,7 +280,7 @@ describe('AuthService', () => {
     });
     expect(prismaService.user.updateMany).toHaveBeenCalledWith({
       where: { id: baseUser.id },
-      data: { refreshTokenHash: null },
+      data: { refreshTokenHash: null, sessionId: null },
     });
   });
 
@@ -306,14 +293,33 @@ describe('AuthService', () => {
     expect(
       service.extractRefreshToken({
         headers: {
-          cookie: 'other=value; refreshToken=refresh-token; third=value',
+          cookie:
+            'other=value; refresh_token=refresh-token; refreshToken=legacy-token',
         },
       } as never),
     ).toBe('refresh-token');
+    expect(
+      service.extractRefreshToken({
+        headers: {
+          cookie: 'other=value; refreshToken=legacy-token; third=value',
+        },
+      } as never),
+    ).toBe('legacy-token');
 
     service.setRefreshTokenCookie(response as never, 'refresh-token');
     service.clearRefreshTokenCookie(response as never);
 
+    expect(response.cookie).toHaveBeenCalledWith(
+      'refresh_token',
+      'refresh-token',
+      {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false,
+        path: '/auth',
+        maxAge: 2592000000,
+      },
+    );
     expect(response.cookie).toHaveBeenCalledWith(
       'refreshToken',
       'refresh-token',
@@ -325,6 +331,12 @@ describe('AuthService', () => {
         maxAge: 2592000000,
       },
     );
+    expect(response.clearCookie).toHaveBeenCalledWith('refresh_token', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
+      path: '/auth',
+    });
     expect(response.clearCookie).toHaveBeenCalledWith('refreshToken', {
       httpOnly: true,
       sameSite: 'lax',

@@ -23,6 +23,7 @@ describe('user presenter permissions', () => {
       email: 'general@example.com',
       passwordHash: 'hash',
       refreshTokenHash: null,
+      sessionId: null,
       role: UserRole.GeneralDepartment,
       username: 'General User',
       phone: null,
@@ -38,8 +39,13 @@ describe('user presenter permissions', () => {
     });
 
     expect(response.userRole).toBe('General-department');
-    expect(response.user.role).toBe('General-department');
-    expect(response.scope.role).toBe('General-department');
+    expect(response.authRole).toBe('General-department');
+    expect(response.role).toBe('general_department');
+    expect(response.roles).toEqual(['general_department']);
+    expect(response.user.role).toBe('general_department');
+    expect(response.user.authRole).toBe('General-department');
+    expect(response.scope.role).toBe('general_department');
+    expect(response.scope.authRole).toBe('General-department');
   });
 
   it('keeps inventory roles unchanged in auth context', () => {
@@ -48,6 +54,7 @@ describe('user presenter permissions', () => {
       email: 'inventory-it@example.com',
       passwordHash: 'hash',
       refreshTokenHash: null,
+      sessionId: null,
       role: UserRole.INVENTORY_IT,
       username: 'Inventory IT',
       phone: null,
@@ -63,7 +70,11 @@ describe('user presenter permissions', () => {
     });
 
     expect(response.userRole).toBe('INVENTORY_IT');
-    expect(response.userProfile.role).toBe('INVENTORY_IT');
-    expect(response.scope.role).toBe('INVENTORY_IT');
+    expect(response.authRole).toBe('INVENTORY_IT');
+    expect(response.role).toBe('other');
+    expect(response.userProfile.role).toBe('other');
+    expect(response.userProfile.authRole).toBe('INVENTORY_IT');
+    expect(response.scope.role).toBe('other');
+    expect(response.scope.authRole).toBe('INVENTORY_IT');
   });
 });

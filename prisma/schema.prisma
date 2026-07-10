@@ -26,7 +26,7 @@ enum UserRole {
   Operator
   System
   PRESSA
-  GeneralDepartment @map("General-department")
+  GeneralDepartment    @map("General-department")
   Citizen
   citizen
 }
@@ -40,7 +40,8 @@ model User {
   id                String   @id @default(uuid())
   email             String   @unique
   passwordHash      String
-  refreshTokenHash  String?  @map("refresh_token_hash")
+  refreshTokenHash  String?  @unique @map("refresh_token_hash")
+  sessionId         String?  @map("session_id")
   role              UserRole
   username          String?
   phone             String?
@@ -58,6 +59,7 @@ model User {
   @@index([orgId])
   @@index([departmentId])
   @@index([position])
+  @@index([sessionId])
   @@map("users")
 }
 

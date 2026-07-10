@@ -1,6 +1,9 @@
 import { UserRole } from '@prisma/client';
 import { AdminUsersService } from './admin-users.service';
 
+const expectObjectContaining = (value: Record<string, unknown>) =>
+  expect.objectContaining(value) as unknown;
+
 describe('AdminUsersService', () => {
   let service: AdminUsersService;
   let prismaService: {
@@ -102,7 +105,7 @@ describe('AdminUsersService', () => {
     });
 
     expect(prismaService.user.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      data: expectObjectContaining({
         role: UserRole.Practice,
         orgId: null,
         departmentId: null,
@@ -135,7 +138,7 @@ describe('AdminUsersService', () => {
     });
 
     expect(prismaService.user.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      data: expectObjectContaining({
         role: UserRole.GeneralDepartment,
         orgId: null,
         departmentId: null,
@@ -183,7 +186,7 @@ describe('AdminUsersService', () => {
     });
 
     expect(prismaService.user.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      data: expectObjectContaining({
         role: UserRole.INVENTORY_IT,
         orgId: null,
         departmentId: null,

@@ -15,8 +15,9 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: true,
+    origin: parseCorsOrigins(process.env.FRONTEND_ORIGIN),
     credentials: true,
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
   });
 
   const swaggerConfig = new DocumentBuilder()
@@ -41,3 +42,12 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000);
 }
 void bootstrap();
+
+function parseCorsOrigins(value?: string): true | string[] {
+  const origins = value
+    ?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return origins && origins.length > 0 ? origins : true;
+}

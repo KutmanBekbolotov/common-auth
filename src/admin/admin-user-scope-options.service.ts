@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, ScopeOptionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PUBLIC_USER_ROLES } from '../users/user-role';
+import { CLIENT_USER_ROLES, PUBLIC_USER_ROLES } from '../users/user-role';
 import { DEFAULT_SCOPE_OPTIONS } from './user-scope-options';
 
 type ScopeFieldName = 'orgId' | 'departmentId';
@@ -228,6 +228,7 @@ export class AdminUserScopeOptionsService {
     return {
       items: items.map((item) => this.toScopeOptionItem(item)),
       roles: PUBLIC_USER_ROLES,
+      frontendRoles: CLIENT_USER_ROLES,
       orgIds,
       departmentIds,
     };

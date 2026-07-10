@@ -25,9 +25,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email and password' })
   async login(
     @Body() dto: LoginDto,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const session = await this.authService.login(dto.email, dto.password);
+    const session = await this.authService.login(
+      dto.email,
+      dto.password,
+      this.getClientIp(request),
+    );
 
     this.authService.setRefreshTokenCookie(response, session.refreshToken);
 

@@ -99,6 +99,7 @@ JWT payload:
 ```json
 {
   "sub": "user-id",
+  "sid": "session-id",
   "email": "user@example.com",
   "type": "access"
 }
@@ -107,7 +108,7 @@ JWT payload:
 Правила:
 
 - подписывается секретом `JWT_SECRET`;
-- TTL задается `JWT_ACCESS_TTL`, значение по умолчанию `4h`;
+- TTL задается `JWT_ACCESS_TTL`, значение по умолчанию `15m`;
 - используется в заголовке `Authorization: Bearer <accessToken>`;
 - refresh token нельзя использовать вместо access token;
 - role/scope не включены в JWT, их надо получать из auth context.
@@ -117,7 +118,7 @@ JWT payload:
 Refresh token выдается в cookie:
 
 ```text
-refreshToken=<jwt>
+refresh_token=<opaque-random-token>
 ```
 
 Cookie options:
@@ -128,23 +129,13 @@ Cookie options:
 - `path: /auth`;
 - `maxAge` равен `JWT_REFRESH_TTL`, по умолчанию `30d`.
 
-JWT payload:
-
-```json
-{
-  "sub": "user-id",
-  "email": "user@example.com",
-  "type": "refresh"
-}
-```
-
 Правила:
 
-- подписывается `JWT_REFRESH_SECRET`, если он задан, иначе `JWT_SECRET`;
+- является непрозрачной случайной строкой, а не JWT;
 - в БД хранится только SHA-256 хеш refresh token;
 - при каждом успешном login/refresh создается новая session pair;
 - новый login/refresh перезаписывает `refreshTokenHash`, то есть старый refresh token пользователя становится невалидным;
-- logout очищает cookie и устанавливает `refreshTokenHash = null`;
+- logout очищает cookie и устанавливает `refreshTokenHash = null` и `sessionId = null`;
 - при невалидном refresh сервис очищает refresh cookie.
 
 ## 6. Основной auth flow
@@ -285,7 +276,7 @@ Response такой же, как `POST /auth/login`.
 
 ### POST /auth/refresh
 
-Требует валидный `refreshToken` cookie.
+Требует валидный `refresh_token` cookie.
 
 Response такой же, как `POST /auth/login`.
 
@@ -476,7 +467,15 @@ Endpoint-ы доступны только `admin` и `SuperAdmin`.
       "value": "Bishkek"
     }
   ],
-  "roles": ["admin", "SuperAdmin", "INVENTORY_IT", "INVENTORY_AHO", "INVENTORY_ACCOUNTANT", "INVENTORY_AUDITOR", "..."],
+  "roles": [
+    "admin",
+    "SuperAdmin",
+    "INVENTORY_IT",
+    "INVENTORY_AHO",
+    "INVENTORY_ACCOUNTANT",
+    "INVENTORY_AUDITOR",
+    "..."
+  ],
   "orgIds": ["Bishkek", "Chuy"],
   "departmentIds": ["Osh-City", "Kemin"]
 }
@@ -825,8 +824,7 @@ Frontend очереди должен делать refresh только посл�
 ```bash
 DATABASE_URL="postgresql://postgres:postgres@localhost:5433/common_auth?schema=public"
 JWT_SECRET="change-me"
-JWT_ACCESS_TTL="4h"
-JWT_REFRESH_SECRET="change-me-refresh"
+JWT_ACCESS_TTL="15m"
 JWT_REFRESH_TTL="30d"
 PASSWORD_SALT_ROUNDS="12"
 PORT="3000"
@@ -838,7 +836,7 @@ SEED_ADMIN_USERNAME="Admin"
 
 Для production:
 
-- `JWT_SECRET` и `JWT_REFRESH_SECRET` должны быть длинными случайными secret-ами;
+- `JWT_SECRET` должен быть длинным случайным secret-ом;
 - `NODE_ENV=production` включает `secure` cookie;
 - API должен работать через HTTPS;
 - CORS origin должен быть ограничен доверенными frontend-доменами;

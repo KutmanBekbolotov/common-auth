@@ -49,9 +49,18 @@ describe('AuthController', () => {
     const response = {};
     const result = await controller.login(
       { email: 'admin@example.com', password: 'password' },
+      {
+        headers: { 'x-forwarded-for': '203.0.113.11, 10.0.0.1' },
+        ip: '127.0.0.1',
+      } as never,
       response as never,
     );
 
+    expect(authService.login).toHaveBeenCalledWith(
+      'admin@example.com',
+      'password',
+      '203.0.113.11',
+    );
     expect(authService.setRefreshTokenCookie).toHaveBeenCalledWith(
       response,
       'refresh-token',

@@ -1,20 +1,35 @@
 import { User, UserRole } from '@prisma/client';
 import { CLOUD_ACCESS_ROLES } from '../auth/auth.constants';
-import { PublicUserRole, toPublicUserRole } from './user-role';
+import {
+  ClientUserRole,
+  PublicUserRole,
+  toClientUserRole,
+  toPublicUserRole,
+} from './user-role';
 
 export type SafeUser = Omit<
   User,
-  'passwordHash' | 'refreshTokenHash' | 'pin' | 'role'
+  'passwordHash' | 'refreshTokenHash' | 'sessionId' | 'pin' | 'role'
 > & {
-  role: PublicUserRole;
+  role: ClientUserRole;
+  roles: ClientUserRole[];
+  authRole: PublicUserRole;
 };
 
 export type AuthResponseUser = SafeUser & {
   ProfilePic: string;
+  permissions: AuthPermissions;
   scope: UserScope;
 };
 
 export type AuthContextResponse = {
+  id: string;
+  email: string;
+  username: string | null;
+  role: ClientUserRole;
+  roles: ClientUserRole[];
+  authRole: PublicUserRole;
+  disabled: boolean;
   currentUser: {
     id: string;
     uid: string;
@@ -31,7 +46,9 @@ export type AuthContextResponse = {
 };
 
 export type UserScope = {
-  role: PublicUserRole;
+  role: ClientUserRole;
+  roles: ClientUserRole[];
+  authRole: PublicUserRole;
   orgId: string | null;
   departmentId: string | null;
   position: string | null;
@@ -43,14 +60,19 @@ export type AuthPermissions = {
 };
 
 export function toSafeUser(user: User): SafeUser {
-  const { passwordHash, refreshTokenHash, pin, role, ...safeUser } = user;
+  const { passwordHash, refreshTokenHash, sessionId, pin, role, ...safeUser } =
+    user;
   void passwordHash;
   void refreshTokenHash;
+  void sessionId;
   void pin;
+  const clientRole = toClientUserRole(role);
 
   return {
     ...safeUser,
-    role: toPublicUserRole(role),
+    role: clientRole,
+    roles: [clientRole],
+    authRole: toPublicUserRole(role),
   };
 }
 
@@ -61,6 +83,7 @@ export function toAuthResponseUser(user: User): AuthResponseUser {
   return {
     ...safeUser,
     ProfilePic: safeUser.photoUrl ?? '',
+    permissions,
     scope: toUserScope(user, permissions),
   };
 }
@@ -70,6 +93,13 @@ export function toAuthContextResponse(user: User): AuthContextResponse {
   const permissions = responseUser.scope.permissions;
 
   return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    role: responseUser.role,
+    roles: responseUser.roles,
+    authRole: responseUser.authRole,
+    disabled: user.disabled,
     currentUser: {
       id: user.id,
       uid: user.id,
@@ -90,8 +120,12 @@ export function toUserScope(
   user: Pick<User, 'role' | 'orgId' | 'departmentId' | 'position'>,
   permissions = toAuthPermissions(user.role),
 ): UserScope {
+  const clientRole = toClientUserRole(user.role);
+
   return {
-    role: toPublicUserRole(user.role),
+    role: clientRole,
+    roles: [clientRole],
+    authRole: toPublicUserRole(user.role),
     orgId: user.orgId,
     departmentId: user.departmentId,
     position: user.position,

@@ -1,7 +1,10 @@
 import { Prisma, ScopeOptionType, UserRole } from '@prisma/client';
 import { ConflictException } from '@nestjs/common';
-import { PUBLIC_USER_ROLES } from '../users/user-role';
+import { CLIENT_USER_ROLES, PUBLIC_USER_ROLES } from '../users/user-role';
 import { AdminUserScopeOptionsService } from './admin-user-scope-options.service';
+
+const expectArrayContaining = (value: unknown[]) =>
+  expect.arrayContaining(value) as unknown;
 
 type ScopeOptionRecord = {
   id: string;
@@ -83,13 +86,14 @@ describe('AdminUserScopeOptionsService', () => {
         { id: '1', type: ScopeOptionType.orgId, value: 'Bishkek' },
         { id: '2', type: ScopeOptionType.departmentId, value: 'Osh-City' },
       ],
-      roles: expect.arrayContaining([
+      roles: expectArrayContaining([
         ...PUBLIC_USER_ROLES,
         UserRole.INVENTORY_IT,
         UserRole.INVENTORY_AHO,
         UserRole.INVENTORY_ACCOUNTANT,
         UserRole.INVENTORY_AUDITOR,
       ]),
+      frontendRoles: CLIENT_USER_ROLES,
       orgIds: ['Bishkek'],
       departmentIds: ['Osh-City'],
     });

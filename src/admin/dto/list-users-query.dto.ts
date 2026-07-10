@@ -2,7 +2,10 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
-import { PUBLIC_USER_ROLES, toPrismaUserRole } from '../../users/user-role';
+import {
+  ACCEPTED_USER_ROLE_VALUES,
+  toPrismaUserRole,
+} from '../../users/user-role';
 
 export class ListUsersQueryDto {
   @ApiPropertyOptional({ example: 'ivanov' })
@@ -20,7 +23,7 @@ export class ListUsersQueryDto {
   @IsString()
   departmentId?: string;
 
-  @ApiPropertyOptional({ enum: PUBLIC_USER_ROLES, example: UserRole.Operator })
+  @ApiPropertyOptional({ enum: ACCEPTED_USER_ROLE_VALUES, example: 'operator' })
   @IsOptional()
   @Transform(({ value }) => toPrismaUserRole(value))
   @IsEnum(UserRole)

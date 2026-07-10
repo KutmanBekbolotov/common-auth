@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -60,11 +61,20 @@ export class JwtAuthGuard implements CanActivate {
         position: true,
         photoUrl: true,
         disabled: true,
+        sessionId: true,
       },
     });
 
-    if (!user || user.disabled) {
-      throw new UnauthorizedException('User is disabled or no longer exists');
+    if (!user) {
+      throw new UnauthorizedException('User no longer exists');
+    }
+
+    if (user.disabled) {
+      throw new ForbiddenException('User is disabled');
+    }
+
+    if (!payload.sid || user.sessionId !== payload.sid) {
+      throw new UnauthorizedException('Access session is invalid');
     }
 
     (request as AuthenticatedRequest).user = user;
