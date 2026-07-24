@@ -1,5 +1,8 @@
 import { User, UserRole } from '@prisma/client';
-import { CLOUD_ACCESS_ROLES } from '../auth/auth.constants';
+import {
+  CLOUD_ACCESS_ROLES,
+  PRACTICE_EXAM_DISTRIBUTION_ROLES,
+} from '../auth/auth.constants';
 import {
   ClientUserRole,
   PublicUserRole,
@@ -57,6 +60,7 @@ export type UserScope = {
 
 export type AuthPermissions = {
   cloud: boolean;
+  practiceExamDistribution: boolean;
 };
 
 export function toSafeUser(user: User): SafeUser {
@@ -136,5 +140,7 @@ export function toUserScope(
 export function toAuthPermissions(role: UserRole): AuthPermissions {
   return {
     cloud: CLOUD_ACCESS_ROLES.includes(role),
+    practiceExamDistribution:
+      PRACTICE_EXAM_DISTRIBUTION_ROLES.includes(role),
   };
 }

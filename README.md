@@ -91,10 +91,10 @@ Refresh tokens are opaque random strings stored only in an `httpOnly`
 Supported roles:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | practice_manager | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
-`spec` users must have both `orgId` and `departmentId`. Inventory roles, `General-department`, and `Practice` do not require `orgId` or `departmentId`. `General-department` is for central apparatus users. `Practice` is intended for display-only users and should not be used for admin/distribution screens. Available `roles`, `orgId`, and `departmentId` values for admin forms are returned by `GET /admin/users/scope-options`.
+`spec` users must have both `orgId` and `departmentId`. Inventory roles, `General-department`, `Practice`, and `practice_manager` do not require `orgId` or `departmentId`. `General-department` is for central apparatus users. `Practice` is intended for display-only users and should not be used for admin/distribution screens. `practice_manager` is intended only for managing cadet distribution for the practical exam and receives `permissions.practiceExamDistribution = true` without cloud/admin access. Available `roles`, `orgId`, and `departmentId` values for admin forms are returned by `GET /admin/users/scope-options`.
 
 ## Checks
 
@@ -105,3 +105,31 @@ npm test
 npm run test:e2e
 npx prisma validate
 ```
+
+## Employee Directory Import
+
+The employee import reads the restored employee directory database and syncs
+staff into `users` with `username`, `phone`, `orgId`, `departmentId`,
+`position`, `role`, and `disabled`.
+
+Configure the two databases in `.env`:
+
+```bash
+EMPLOYEE_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/employee_analysis"
+AUTH_DATABASE_URL="postgresql://postgres:postgres@localhost:5433/common_auth?schema=public"
+EMPLOYEE_IMPORT_DEFAULT_PASSWORD="change-me-employee-password"
+```
+
+Recommended flow:
+
+```bash
+npm run import:employees:report
+npm run import:employees:dry-run
+npm run import:employees
+```
+
+`report` only reads the employee source. `dry-run` reads both databases and
+prints create/update counts without writing. The import preserves manual auth
+roles such as `admin`, `SuperAdmin`, service, display, and inventory roles by
+default. Active mapped employees are enabled; inactive employees and unmapped
+new employees stay disabled.

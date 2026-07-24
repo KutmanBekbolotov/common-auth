@@ -74,7 +74,7 @@
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | practice_manager | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
 Правила:
@@ -84,8 +84,10 @@ admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin 
 - inventory-роли не требуют `orgId`/`departmentId`; складовой доступ вычисляет inventory-service по роли;
 - роль `General-department` предназначена для центрального аппарата и не требует `orgId`/`departmentId`;
 - роль `Practice` предназначена для display-only/табло-сценариев и не должна использоваться для admin/distribution flow;
+- роль `practice_manager` предназначена только для управления распределением курсантов на практический экзамен;
 - доступ к облаку определяется полем `permissions.cloud`;
 - `permissions.cloud = true` для ролей `admin`, `ovk`, `SuperAdmin`, `System`;
+- `permissions.practiceExamDistribution = true` только для роли `practice_manager`;
 - клиентские проверки ролей нужны только для UX, финальное решение о доступе всегда принимает backend.
 
 ## 5. Token/session model
@@ -205,7 +207,8 @@ Response:
       "orgId": null,
       "departmentId": null,
       "permissions": {
-        "cloud": true
+        "cloud": true,
+        "practiceExamDistribution": false
       }
     },
     "legacyFirebaseUid": null,
@@ -224,11 +227,13 @@ Response:
     "orgId": null,
     "departmentId": null,
     "permissions": {
-      "cloud": true
+      "cloud": true,
+      "practiceExamDistribution": false
     }
   },
   "permissions": {
-    "cloud": true
+    "cloud": true,
+    "practiceExamDistribution": false
   }
 }
 ```
@@ -345,7 +350,8 @@ Authorization: Bearer <adminOrSuperAdminAccessToken>
         "orgId": "Bishkek",
         "departmentId": "Osh-City",
         "permissions": {
-          "cloud": false
+          "cloud": false,
+          "practiceExamDistribution": false
         }
       },
       "legacyFirebaseUid": null,
@@ -604,6 +610,7 @@ Authorization: Bearer <accessToken>
 - `admin`/`SuperAdmin` обычно получают полный доступ;
 - `spec` должен ограничиваться своими `orgId` и `departmentId`;
 - `Practice` использовать только для display-only сценариев;
+- `practice_manager` использовать только для endpoint-ов распределения курсантов на практический экзамен;
 - остальные роли (`Manager`, `Auditor`, `Operator`, `ceo`, `license`, `hr`, `ovk`, `TV`, `Terminal`, `System`, `PRESSA`, `General-department`, `Citizen`) должны иметь явно описанные права внутри конкретного сервиса;
 - нельзя полагаться только на скрытие кнопок во frontend.
 
@@ -651,6 +658,7 @@ type QueueAuthUser = {
   position: string | null;
   permissions: {
     cloud: boolean;
+    practiceExamDistribution: boolean;
   };
 };
 ```
@@ -669,6 +677,7 @@ type QueueAuthUser = {
 | Работа с талонами: взять следующий, вызвать, начать обслуживание, завершить, отложить, отменить в пределах своего окна/отдела | `Operator`                   | только свой `orgId` + `departmentId`                                                         |
 | Legacy department accounts во время миграции                                                                                  | `spec`                       | только свой `orgId` + `departmentId`; желательно постепенно заменить на `Operator`/`Manager` |
 | Read-only аудит отчетов                                                                                                       | `Auditor`                    | все или ограниченный scope, если очередь добавит такой режим                                 |
+| Распределение курсантов на практический экзамен                                                                                | `practice_manager`           | только endpoint-ы практического экзамена                                                     |
 | Табло, терминалы, киоски                                                                                                      | `TV`, `Terminal`, `Practice` | только display/kiosk endpoint-ы без staff actions                                            |
 | Граждане                                                                                                                      | `Citizen`, `citizen`         | только публичные endpoint-ы получения/проверки талона, если такие есть                       |
 

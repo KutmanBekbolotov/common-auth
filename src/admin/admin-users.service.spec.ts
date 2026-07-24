@@ -113,6 +113,39 @@ describe('AdminUsersService', () => {
     });
   });
 
+  it('allows creating practice_manager users without orgId and departmentId', async () => {
+    adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
+      undefined,
+    );
+    prismaService.user.create.mockResolvedValue({
+      id: 'user-id',
+      email: 'practice-manager@example.com',
+      role: UserRole.practice_manager,
+      username: 'Practice Manager',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await service.createUser({
+      email: 'practice-manager@example.com',
+      password: 'strong-password',
+      role: UserRole.practice_manager,
+    });
+
+    expect(prismaService.user.create).toHaveBeenCalledWith({
+      data: expectObjectContaining({
+        role: UserRole.practice_manager,
+        orgId: null,
+        departmentId: null,
+      }),
+    });
+  });
+
   it('allows creating General-department users without orgId and departmentId', async () => {
     adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
       undefined,
@@ -321,6 +354,50 @@ describe('AdminUsersService', () => {
     expect(prismaService.user.update).toHaveBeenCalledWith({
       where: { id: 'user-id' },
       data: { role: UserRole.Practice },
+    });
+  });
+
+  it('allows updating role to practice_manager without orgId and departmentId', async () => {
+    adminUserScopeOptionsService.assertScopeOptionExists.mockResolvedValue(
+      undefined,
+    );
+    prismaService.user.findUnique.mockResolvedValue({
+      id: 'user-id',
+      email: 'user@example.com',
+      role: UserRole.hr,
+      username: 'User',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      passwordHash: 'hash',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    prismaService.user.update.mockResolvedValue({
+      id: 'user-id',
+      email: 'user@example.com',
+      role: UserRole.practice_manager,
+      username: 'User',
+      orgId: null,
+      departmentId: null,
+      photoUrl: null,
+      legacyFirebaseUid: null,
+      disabled: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await service.updateUserRole(
+      'user-id',
+      UserRole.practice_manager,
+      'admin-id',
+    );
+
+    expect(prismaService.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      data: { role: UserRole.practice_manager },
     });
   });
 

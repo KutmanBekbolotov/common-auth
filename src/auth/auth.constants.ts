@@ -18,3 +18,6 @@ export const CLOUD_ACCESS_ROLES: UserRole[] = [
   UserRole.SuperAdmin,
   UserRole.System,
 ];
+export const PRACTICE_EXAM_DISTRIBUTION_ROLES: UserRole[] = [
+  UserRole.practice_manager,
+];

@@ -4,7 +4,7 @@ const { Client } = require('pg');
 
 const EMPLOYEE_DATABASE_URL =
   process.env.EMPLOYEE_DATABASE_URL ??
-  'postgresql://postgres:postgres@localhost:5432/employee';
+  'postgresql://postgres:postgres@127.0.0.1:55432/employee_analysis';
 const AUTH_DATABASE_URL =
   process.env.AUTH_DATABASE_URL ??
   'postgresql://postgres:postgres@localhost:5433/common_auth?schema=public';
@@ -16,6 +16,42 @@ const LEGACY_UID_PREFIX =
 const DEFAULT_PASSWORD = process.env.EMPLOYEE_IMPORT_DEFAULT_PASSWORD;
 const SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
 const DRY_RUN = process.argv.includes('--dry-run');
+const SOURCE_REPORT =
+  process.argv.includes('--source-report') ||
+  process.argv.includes('--employee-report');
+const PRESERVE_EXISTING_DISABLED =
+  process.env.EMPLOYEE_IMPORT_PRESERVE_DISABLED !== 'false';
+const PRESERVE_MANUAL_ROLES =
+  process.env.EMPLOYEE_IMPORT_OVERWRITE_MANUAL_ROLES !== 'true';
+
+const ROLE = Object.freeze({
+  AUDITOR: 'Auditor',
+  CEO: 'ceo',
+  CITIZEN: 'Citizen',
+  GENERAL_DEPARTMENT: 'General-department',
+  HR: 'hr',
+  LICENSE: 'license',
+  MANAGER: 'Manager',
+  OPERATOR: 'Operator',
+  OVK: 'ovk',
+  PRACTICE_MANAGER: 'practice_manager',
+  PRESSA: 'PRESSA',
+});
+
+const MANUAL_AUTH_ROLES = new Set([
+  'admin',
+  'SuperAdmin',
+  'System',
+  'TV',
+  'Terminal',
+  'Practice',
+  ROLE.PRACTICE_MANAGER,
+  ROLE.AUDITOR,
+  'INVENTORY_IT',
+  'INVENTORY_AHO',
+  'INVENTORY_ACCOUNTANT',
+  'INVENTORY_AUDITOR',
+]);
 
 const CENTRAL_DEPARTMENTS = new Set([
   'Административно-хозяйственный сектор',
@@ -93,6 +129,76 @@ const REGION_PATTERNS = [
   },
 ];
 
+const DEPARTMENT_ROLE_RULES = [
+  {
+    role: ROLE.HR,
+    reason: 'department:hr',
+    patterns: [/управлен.*человеческ.*ресурс/, /кадр/],
+  },
+  {
+    role: ROLE.OVK,
+    reason: 'department:ovk',
+    patterns: [/внутренн.*контрол/, /противодейств.*коррупц/],
+  },
+  {
+    role: ROLE.LICENSE,
+    reason: 'department:license',
+    patterns: [/лиценз/],
+  },
+  {
+    role: ROLE.PRESSA,
+    reason: 'department:pressa',
+    patterns: [/связ.*обществен/, /пресс/],
+  },
+];
+
+const LEADERSHIP_POSITION_PATTERNS = [
+  /директор/,
+  /заместител/,
+  /начальник/,
+  /завед/,
+  /руководител/,
+];
+
+const OPERATOR_POSITION_PATTERNS = [
+  /администратор/,
+  /инспектор/,
+  /консультант/,
+  /оператор/,
+  /регистратор/,
+  /специалист/,
+];
+
+const SUPPORT_POSITION_PATTERNS = [
+  /(^|[^а-я])водител/,
+  /дворник/,
+  /кочегар/,
+  /охран/,
+  /сантех/,
+  /сторож/,
+  /убор/,
+  /электрик/,
+];
+
+const INACTIVE_STATUS_PATTERNS = [
+  /уволен/,
+  /увольн/,
+  /неактив/,
+  /отстран/,
+  /расторг/,
+  /terminated/,
+  /inactive/,
+  /dismiss/,
+];
+
+const ACTIVE_STATUS_PATTERNS = [
+  /актив/,
+  /работ/,
+  /действ/,
+  /active/,
+  /employed/,
+];
+
 function clean(value) {
   if (value === null || value === undefined) {
     return null;
@@ -105,6 +211,20 @@ function clean(value) {
 function cleanDepartment(value) {
   const department = clean(value);
   return department && department !== '-' ? department : null;
+}
+
+function normalizeForMatch(value) {
+  return clean(value)?.toLowerCase().replace(/ё/g, 'е') ?? '';
+}
+
+function matchesAny(value, patterns) {
+  const normalized = normalizeForMatch(value);
+
+  if (!normalized) {
+    return false;
+  }
+
+  return patterns.some((pattern) => pattern.test(normalized));
 }
 
 function fullName(employee) {
@@ -121,7 +241,7 @@ function inferRegion(department) {
     return null;
   }
 
-  if (CENTRAL_DEPARTMENTS.has(department)) {
+  if (isCentralDepartment(department)) {
     return 'Central';
   }
 
@@ -134,18 +254,113 @@ function inferRegion(department) {
   return null;
 }
 
-function classifyRole(position) {
-  const normalized = clean(position)?.toLowerCase() ?? '';
+function isCentralDepartment(department) {
+  const cleanedDepartment = cleanDepartment(department);
 
-  if (normalized.includes('завед') || normalized.includes('директор')) {
-    return 'Manager';
+  return Boolean(
+    cleanedDepartment && CENTRAL_DEPARTMENTS.has(cleanedDepartment),
+  );
+}
+
+function classifyEmployeeRole(employee) {
+  const department = cleanDepartment(employee.department);
+  const position = clean(employee.position);
+
+  if (
+    department === 'Руководящий отдел' &&
+    matchesAny(position, LEADERSHIP_POSITION_PATTERNS)
+  ) {
+    return {
+      role: ROLE.CEO,
+      reason: 'department:leadership',
+    };
   }
 
-  if (normalized.includes('специалист') || normalized.includes('оператор')) {
-    return 'Operator';
+  for (const rule of DEPARTMENT_ROLE_RULES) {
+    if (matchesAny(department, rule.patterns)) {
+      return {
+        role: rule.role,
+        reason: rule.reason,
+      };
+    }
+  }
+
+  if (matchesAny(position, SUPPORT_POSITION_PATTERNS)) {
+    return {
+      role: null,
+      reason: 'position:support',
+    };
+  }
+
+  if (isCentralDepartment(department)) {
+    return {
+      role: ROLE.GENERAL_DEPARTMENT,
+      reason: 'department:central',
+    };
+  }
+
+  if (matchesAny(position, LEADERSHIP_POSITION_PATTERNS)) {
+    return {
+      role: ROLE.MANAGER,
+      reason: 'position:manager',
+    };
+  }
+
+  if (matchesAny(position, OPERATOR_POSITION_PATTERNS)) {
+    return {
+      role: ROLE.OPERATOR,
+      reason: 'position:operator',
+    };
+  }
+
+  return {
+    role: null,
+    reason: 'unmapped',
+  };
+}
+
+function parseSourceBoolean(value) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+
+  const normalized = normalizeForMatch(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (['1', 'true', 't', 'yes', 'y', 'да'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'f', 'no', 'n', 'нет'].includes(normalized)) {
+    return false;
   }
 
   return null;
+}
+
+function isActiveEmployee(employee) {
+  const active = parseSourceBoolean(employee.active);
+
+  if (active === false) {
+    return false;
+  }
+
+  if (matchesAny(employee.status, INACTIVE_STATUS_PATTERNS)) {
+    return false;
+  }
+
+  if (active === true || matchesAny(employee.status, ACTIVE_STATUS_PATTERNS)) {
+    return true;
+  }
+
+  return true;
 }
 
 function phoneKey(phone) {
@@ -182,6 +397,46 @@ function generatedEmail(employeeId) {
 
 function legacyUid(employeeId) {
   return `${LEGACY_UID_PREFIX}:${employeeId}`;
+}
+
+function resolveRole(classification, existing) {
+  if (
+    existing?.role &&
+    PRESERVE_MANUAL_ROLES &&
+    MANUAL_AUTH_ROLES.has(existing.role)
+  ) {
+    return {
+      role: existing.role,
+      roleReason: 'existing:manual-role',
+      classifiedRole: classification.role,
+    };
+  }
+
+  return {
+    role: classification.role ?? existing?.role ?? ROLE.CITIZEN,
+    roleReason: classification.role
+      ? classification.reason
+      : existing?.role
+        ? 'existing:role'
+        : classification.reason,
+    classifiedRole: classification.role,
+  };
+}
+
+function resolveDisabled(existing, sourceIsActive, classifiedRole) {
+  if (!sourceIsActive) {
+    return true;
+  }
+
+  if (PRESERVE_EXISTING_DISABLED && existing?.disabled) {
+    return true;
+  }
+
+  if (classifiedRole) {
+    return false;
+  }
+
+  return existing?.disabled ?? true;
 }
 
 async function fetchEmployees(client) {
@@ -260,7 +515,7 @@ function toImportRows(employees, authIndexes) {
   return employees.map((employee) => {
     const departmentId = cleanDepartment(employee.department);
     const position = clean(employee.position);
-    const role = classifyRole(position);
+    const classification = classifyEmployeeRole(employee);
     const uid = legacyUid(employee.id);
     const existingByLegacy = authIndexes.byLegacyUid.get(uid);
     const existingByPhone = authIndexes.byPhone.get(
@@ -273,7 +528,8 @@ function toImportRows(employees, authIndexes) {
         existingByPhone.legacyFirebaseUid === uid)
         ? existingByPhone
         : null);
-    const isMappedRole = Boolean(role);
+    const resolvedRole = resolveRole(classification, existing);
+    const sourceIsActive = isActiveEmployee(employee);
 
     return {
       employeeId: employee.id,
@@ -284,12 +540,18 @@ function toImportRows(employees, authIndexes) {
       departmentId,
       position,
       legacyFirebaseUid: uid,
-      role: role ?? existing?.role ?? 'Citizen',
-      disabled: isMappedRole ? false : (existing?.disabled ?? true),
+      role: resolvedRole.role,
+      roleReason: resolvedRole.roleReason,
+      classifiedRole: resolvedRole.classifiedRole,
+      disabled: resolveDisabled(
+        existing,
+        sourceIsActive,
+        resolvedRole.classifiedRole,
+      ),
       matchedBy: existingByLegacy ? 'legacy' : existing ? 'phone' : null,
       existingUserId: existing?.id ?? null,
       sourceStatus: clean(employee.status),
-      sourceActive: Boolean(employee.active),
+      sourceActive: sourceIsActive,
     };
   });
 }
@@ -412,50 +674,94 @@ async function insertUser(client, row, passwordHash) {
 }
 
 function summarize(rows) {
+  const roleCounts = countBy(rows, (row) => row.role);
+  const roleReasons = countBy(rows, (row) => row.roleReason);
   const summary = {
     total: rows.length,
+    active: rows.filter((row) => row.sourceActive).length,
+    inactive: rows.filter((row) => !row.sourceActive).length,
     create: rows.filter((row) => !row.existingUserId).length,
     updateByLegacy: rows.filter((row) => row.matchedBy === 'legacy').length,
     updateByPhone: rows.filter((row) => row.matchedBy === 'phone').length,
-    operator: rows.filter((row) => row.role === 'Operator').length,
-    manager: rows.filter((row) => row.role === 'Manager').length,
+    roleCounts,
+    roleReasons,
     disabled: rows.filter((row) => row.disabled).length,
     missingRegion: rows.filter((row) => !row.orgId).length,
     missingDepartment: rows.filter((row) => !row.departmentId).length,
   };
   const unmappedPositions = new Map();
+  const missingRegionDepartments = new Map();
 
   for (const row of rows) {
-    if (row.role === 'Operator' || row.role === 'Manager') {
-      continue;
+    if (!row.classifiedRole && row.sourceActive) {
+      const key = row.position ?? '<empty>';
+      unmappedPositions.set(key, (unmappedPositions.get(key) ?? 0) + 1);
     }
 
-    const key = row.position ?? '<empty>';
-    unmappedPositions.set(key, (unmappedPositions.get(key) ?? 0) + 1);
+    if (!row.orgId && row.departmentId) {
+      missingRegionDepartments.set(
+        row.departmentId,
+        (missingRegionDepartments.get(row.departmentId) ?? 0) + 1,
+      );
+      continue;
+    }
   }
 
   return {
     ...summary,
-    unmappedPositions: [...unmappedPositions.entries()].sort(
-      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-    ),
+    unmappedActivePositions: sortEntries(unmappedPositions),
+    missingRegionDepartments: sortEntries(missingRegionDepartments),
   };
+}
+
+function countBy(rows, getKey) {
+  const counts = {};
+
+  for (const row of rows) {
+    const key = getKey(row) ?? '<empty>';
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+
+  return Object.fromEntries(
+    Object.entries(counts).sort(
+      ([leftKey, leftCount], [rightKey, rightCount]) =>
+        rightCount - leftCount || leftKey.localeCompare(rightKey),
+    ),
+  );
+}
+
+function sortEntries(map) {
+  return [...map.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
 }
 
 async function main() {
   const employeeClient = new Client({
     connectionString: EMPLOYEE_DATABASE_URL,
   });
-  const authClient = new Client({ connectionString: AUTH_DATABASE_URL });
+  const authClient = SOURCE_REPORT
+    ? null
+    : new Client({ connectionString: AUTH_DATABASE_URL });
 
   await employeeClient.connect();
-  await authClient.connect();
+  if (authClient) {
+    await authClient.connect();
+  }
 
   try {
-    const [employees, authUsers] = await Promise.all([
-      fetchEmployees(employeeClient),
-      fetchAuthUsers(authClient),
-    ]);
+    const employees = await fetchEmployees(employeeClient);
+
+    if (SOURCE_REPORT) {
+      const rows = toImportRows(employees, buildAuthIndexes([]));
+      console.log(JSON.stringify(summarize(rows), null, 2));
+      console.log(
+        'Employee source report only. No auth data was read or written.',
+      );
+      return;
+    }
+
+    const authUsers = await fetchAuthUsers(authClient);
     const rows = toImportRows(employees, buildAuthIndexes(authUsers));
     const summary = summarize(rows);
 
@@ -487,18 +793,29 @@ async function main() {
     console.log(`Imported ${rows.length} employees.`);
     console.log(`Ensured ${scopeOptionCount} scope option values.`);
   } catch (error) {
-    if (!DRY_RUN) {
+    if (authClient && !DRY_RUN) {
       await authClient.query('rollback').catch(() => undefined);
     }
 
     throw error;
   } finally {
     await employeeClient.end();
-    await authClient.end();
+    if (authClient) {
+      await authClient.end();
+    }
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  classifyEmployeeRole,
+  inferRegion,
+  isActiveEmployee,
+  toImportRows,
+};

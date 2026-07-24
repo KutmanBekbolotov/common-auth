@@ -17,6 +17,7 @@ export type ClientUserRole =
   | 'pressa'
   | 'TV'
   | 'Practice'
+  | 'practice_manager'
   | 'other';
 
 export type PublicUserRole =
@@ -42,6 +43,7 @@ export const CLIENT_USER_ROLES: ClientUserRole[] = [
   'pressa',
   'TV',
   'Practice',
+  'practice_manager',
   'other',
 ];
 
@@ -70,6 +72,7 @@ const CLIENT_ROLE_BY_PRISMA_ROLE: Record<UserRole, ClientUserRole> = {
   [UserRole.Operator]: 'operator',
   [UserRole.System]: 'other',
   [UserRole.PRESSA]: 'pressa',
+  [UserRole.practice_manager]: 'practice_manager',
   [UserRole.GeneralDepartment]: 'general_department',
   [UserRole.Citizen]: 'other',
   [UserRole.citizen]: 'other',
@@ -90,6 +93,7 @@ const PRISMA_ROLE_BY_CLIENT_ROLE: Partial<Record<ClientUserRole, UserRole>> = {
   pressa: UserRole.PRESSA,
   TV: UserRole.TV,
   Practice: UserRole.Practice,
+  practice_manager: UserRole.practice_manager,
 };
 
 export function toPublicUserRole(role: UserRole): PublicUserRole {

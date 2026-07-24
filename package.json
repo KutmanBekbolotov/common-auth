@@ -19,6 +19,8 @@
     "prisma:push": "prisma db push",
     "prisma:seed": "prisma db seed",
     "import:employees": "node scripts/import-employee-directory.js",
+    "import:employees:report": "node scripts/import-employee-directory.js --source-report",
+    "import:employees:dry-run": "node scripts/import-employee-directory.js --dry-run",
     "docker:dev": "docker compose up",
     "docker:dev:build": "docker compose up --build",
     "docker:dev:down": "docker compose down",

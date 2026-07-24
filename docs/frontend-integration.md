@@ -33,10 +33,10 @@ Authorization: Bearer <accessToken>
 Поддерживаемые роли:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
+admin | ceo | license | spec | hr | ovk | TV | Practice | practice_manager | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
-Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для inventory-ролей, `Practice` и `General-department` они не обязательны. Роль `General-department` предназначена для центрального аппарата. Роль `Practice` предназначена для пользователей табло и не должна использовать admin/distribution flow. Для интерфейсов распределения используйте `spec` и другие рабочие роли.
+Для пользователя с ролью `spec` обязательны `orgId` и `departmentId`. Для inventory-ролей, `Practice`, `practice_manager` и `General-department` они не обязательны. Роль `General-department` предназначена для центрального аппарата. Роль `Practice` предназначена для пользователей табло и не должна использовать admin/distribution flow. Роль `practice_manager` предназначена только для управления распределением курсантов на практический экзамен.
 Публичная регистрация сайта всегда создает пользователя с ролью `Citizen`; клиент не должен отправлять `role`.
 
 ## Permissions
@@ -47,6 +47,12 @@ Auth response содержит объект `permissions`. Для доступа
 permissions.cloud === true;
 ```
 
+Для управления распределением курсантов на практический экзамен фронт должен проверять:
+
+```ts
+permissions.practiceExamDistribution === true;
+```
+
 Сейчас доступ к облаку получают:
 
 ```text
@@ -54,6 +60,7 @@ admin | ovk | SuperAdmin | System
 ```
 
 То есть `ovk`, `SuperAdmin` и `System` должны видеть облако так же, как `admin`.
+`practice_manager` не получает облако и admin-доступ, только `practiceExamDistribution`.
 
 ## Auth Flow
 
@@ -160,7 +167,8 @@ Response:
       "orgId": null,
       "departmentId": null,
       "permissions": {
-        "cloud": true
+        "cloud": true,
+        "practiceExamDistribution": false
       }
     },
     "legacyFirebaseUid": null,
@@ -179,11 +187,13 @@ Response:
     "orgId": null,
     "departmentId": null,
     "permissions": {
-      "cloud": true
+      "cloud": true,
+      "practiceExamDistribution": false
     }
   },
   "permissions": {
-    "cloud": true
+    "cloud": true,
+    "practiceExamDistribution": false
   }
 }
 ```
@@ -271,7 +281,8 @@ Response:
         "orgId": "Bishkek",
         "departmentId": "Osh-City",
         "permissions": {
-          "cloud": false
+          "cloud": false,
+          "practiceExamDistribution": false
         }
       },
       "legacyFirebaseUid": null,
@@ -312,6 +323,7 @@ Response:
     "ovk",
     "TV",
     "Practice",
+    "practice_manager",
     "Terminal",
     "SuperAdmin",
     "INVENTORY_IT",
@@ -483,7 +495,8 @@ Response:
       "orgId": "Bishkek",
       "departmentId": "Osh-City",
       "permissions": {
-        "cloud": false
+        "cloud": false,
+        "practiceExamDistribution": false
       }
     },
     "legacyFirebaseUid": null,
@@ -658,6 +671,7 @@ type AuthContextValue = {
     | 'ovk'
     | 'TV'
     | 'Practice'
+    | 'practice_manager'
     | 'Terminal'
     | 'SuperAdmin'
     | 'Manager'
@@ -681,6 +695,7 @@ type AuthContextValue = {
       | 'ovk'
       | 'TV'
       | 'Practice'
+      | 'practice_manager'
       | 'Terminal'
       | 'SuperAdmin'
       | 'Manager'
@@ -694,10 +709,12 @@ type AuthContextValue = {
     departmentId: string | null;
     permissions: {
       cloud: boolean;
+      practiceExamDistribution: boolean;
     };
   } | null;
   permissions: {
     cloud: boolean;
+    practiceExamDistribution: boolean;
   };
   loading: boolean;
   login(email: string, password: string): Promise<void>;
