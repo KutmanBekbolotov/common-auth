@@ -91,7 +91,7 @@ Refresh tokens are opaque random strings stored only in an `httpOnly`
 Supported roles:
 
 ```text
-admin | ceo | license | spec | hr | ovk | TV | Practice | practice_manager | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
+common | admin | ceo | license | spec | hr | ovk | TV | Practice | practice_manager | Terminal | SuperAdmin | INVENTORY_IT | INVENTORY_AHO | INVENTORY_ACCOUNTANT | INVENTORY_AUDITOR | Manager | Auditor | Operator | System | PRESSA | General-department | Citizen
 ```
 
 `spec` users must have both `orgId` and `departmentId`. Inventory roles, `General-department`, `Practice`, and `practice_manager` do not require `orgId` or `departmentId`. `General-department` is for central apparatus users. `Practice` is intended for display-only users and should not be used for admin/distribution screens. `practice_manager` is intended only for managing cadet distribution for the practical exam and receives `permissions.practiceExamDistribution = true` without cloud/admin access. Available `roles`, `orgId`, and `departmentId` values for admin forms are returned by `GET /admin/users/scope-options`.

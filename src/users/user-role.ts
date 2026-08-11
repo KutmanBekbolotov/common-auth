@@ -3,6 +3,7 @@ import { UserRole } from '@prisma/client';
 export const GENERAL_DEPARTMENT_PUBLIC_ROLE = 'General-department' as const;
 
 export type ClientUserRole =
+  | 'common'
   | 'admin'
   | 'super_admin'
   | 'manager'
@@ -29,6 +30,7 @@ export const PUBLIC_USER_ROLES: PublicUserRole[] = Object.values(UserRole)
   .map((role) => toPublicUserRole(role));
 
 export const CLIENT_USER_ROLES: ClientUserRole[] = [
+  'common',
   'admin',
   'super_admin',
   'manager',
@@ -53,6 +55,7 @@ export const ACCEPTED_USER_ROLE_VALUES = [
 ] as const;
 
 const CLIENT_ROLE_BY_PRISMA_ROLE: Record<UserRole, ClientUserRole> = {
+  [UserRole.common]: 'common',
   [UserRole.admin]: 'admin',
   [UserRole.ceo]: 'ceo',
   [UserRole.license]: 'license',
@@ -79,6 +82,7 @@ const CLIENT_ROLE_BY_PRISMA_ROLE: Record<UserRole, ClientUserRole> = {
 };
 
 const PRISMA_ROLE_BY_CLIENT_ROLE: Partial<Record<ClientUserRole, UserRole>> = {
+  common: UserRole.common,
   admin: UserRole.admin,
   super_admin: UserRole.SuperAdmin,
   manager: UserRole.Manager,

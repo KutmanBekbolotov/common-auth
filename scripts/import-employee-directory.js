@@ -39,6 +39,7 @@ const ROLE = Object.freeze({
 });
 
 const MANUAL_AUTH_ROLES = new Set([
+  'common',
   'admin',
   'SuperAdmin',
   'System',
